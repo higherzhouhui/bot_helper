@@ -1,0 +1,698 @@
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { NewsCategory, News, UserNewsPreference, NewsReadHistory } = require('../models');
+const Sequelize = require('sequelize');
+
+class NewsService {
+  constructor() {
+    // 新闻源配置（站点分类键可能与统一键不同）
+    this.newsSources = {
+      'sina': {
+        name: '新浪新闻',
+        baseUrl: 'https://news.sina.com.cn',
+        categories: {
+          // 统一键 → 站点键 & 路径 & 全链接
+          'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://tech.sina.com.cn/' },
+          'finance': { siteKey: 'finance', url: '/finance/', fullUrl: 'https://finance.sina.com.cn/' },
+          'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.sina.com.cn/' },
+          'ent': { siteKey: 'ent', url: '/ent/', fullUrl: 'https://ent.sina.com.cn/' },
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sina.com.cn/world/' }
+        }
+      },
+      '163': {
+        name: '网易新闻',
+        baseUrl: 'https://news.163.com',
+        categories: {
+          'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://tech.163.com/' },
+          'finance': { siteKey: 'money', url: '/money/', fullUrl: 'https://money.163.com/' },
+          'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.163.com/' },
+          'ent': { siteKey: 'ent', url: '/ent/', fullUrl: 'https://ent.163.com/' },
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.163.com/world/' }
+        }
+      },
+      'sohu': {
+        name: '搜狐新闻',
+        baseUrl: 'https://news.sohu.com',
+        categories: {
+          'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://it.sohu.com/' },
+          'finance': { siteKey: 'business', url: '/business/', fullUrl: 'https://business.sohu.com/' },
+          'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.sohu.com/' },
+          'ent': { siteKey: 'yule', url: '/yule/', fullUrl: 'https://yule.sohu.com/' },
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sohu.com/guoji.shtml' }
+        }
+      }
+    };
+
+    // 系统统一分类（与 NewsCategory.name 一致）
+    this.defaultCategories = [
+      { name: 'tech', displayName: '科技', icon: '🚀', color: '#FF6B6B', sortOrder: 1 },
+      { name: 'finance', displayName: '财经', icon: '💰', color: '#4ECDC4', sortOrder: 2 },
+      { name: 'sports', displayName: '体育', icon: '⚽', color: '#45B7D1', sortOrder: 3 },
+      { name: 'ent', displayName: '娱乐', icon: '🎬', color: '#96CEB4', sortOrder: 4 },
+      { name: 'world', displayName: '国际', icon: '🌍', color: '#FFEAA7', sortOrder: 5 },
+      { name: 'society', displayName: '社会', icon: '🏠', color: '#DDA0DD', sortOrder: 6 },
+      { name: 'health', displayName: '健康', icon: '💊', color: '#98D8C8', sortOrder: 7 }
+    ];
+
+    this.httpHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+    };
+  }
+
+  // 对来源站点的分类键做统一映射
+  mapToUnifiedCategory(sourceKey, sourceCategoryKey) {
+    const source = this.newsSources[sourceKey];
+    if (!source) return 'tech';
+    const entry = Object.entries(source.categories).find(([, v]) => v.siteKey === sourceCategoryKey);
+    return entry ? entry[0] : sourceCategoryKey;
+  }
+
+  // 根据统一键取抓取URL（优先 fullUrl）
+  getListUrl(sourceKey, unifiedKey) {
+    const source = this.newsSources[sourceKey];
+    if (!source) return '';
+    const conf = source.categories[unifiedKey];
+    if (!conf) return '';
+    if (conf.fullUrl) return conf.fullUrl;
+    if (conf.url) return source.baseUrl.replace(/\/$/, '') + conf.url;
+    return source.baseUrl;
+  }
+
+  async requestPage(url, refererHost) {
+    const resp = await axios.get(url, {
+      headers: {
+        ...this.httpHeaders,
+        ...(refererHost ? { Referer: refererHost } : {})
+      },
+      timeout: 12000,
+      maxRedirects: 3,
+      validateStatus: (s) => s >= 200 && s < 400
+    });
+    return resp.data;
+  }
+
+  absoluteUrl(base, href) {
+    if (!href) return '';
+    if (href.startsWith('http://') || href.startsWith('https://')) return href;
+    if (href.startsWith('//')) return 'https:' + href;
+    if (href.startsWith('/')) return base.replace(/\/$/, '') + href;
+    return base.replace(/\/$/, '') + '/' + href;
+  }
+
+  cleanTitle(text) {
+    return (text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  // 初始化新闻分类
+  async initializeNewsCategories() {
+    try {
+      for (const category of this.defaultCategories) {
+        await NewsCategory.findOrCreate({
+          where: { name: category.name },
+          defaults: category
+        });
+      }
+      console.log('✅ 新闻分类初始化完成');
+    } catch (error) {
+      console.error('❌ 新闻分类初始化失败:', error);
+    }
+  }
+
+  // 真实抓取：按站点和分类解析列表页，提取文章链接
+  async scrapeNews(sourceKey, unifiedCategoryKey, limit) {
+    const source = this.newsSources[sourceKey];
+    const listUrl = this.getListUrl(sourceKey, unifiedCategoryKey);
+
+    try {
+      const html = await this.requestPage(listUrl, source.baseUrl);
+      const $ = cheerio.load(html);
+      let items = [];
+
+      if (sourceKey === 'sina') {
+        const candidates = [
+          'a[href*=".sina.com.cn"], a[href*="sina.cn"]',
+          '.news-ct a',
+          '.news-item a',
+          '.feed-card-item a',
+          '.blk12 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === '163') {
+        const candidates = [
+          'a[href*="163.com"], a[href*=".126.net"]',
+          '.data_row a, .newsList a, .ndi_main a, .area_left a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'sohu') {
+        const candidates = [
+          'a[href*="sohu.com"]',
+          '.list16 a, .news-box a, .focus-news a, .c-card a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      }
+
+      const seen = new Set();
+      const filtered = [];
+      for (const it of items) {
+        const title = this.cleanTitle(it.title);
+        const href = this.absoluteUrl(source.baseUrl, it.href);
+        if (!title || title.length < 6) continue;
+        if (!href || href.indexOf('javascript:') === 0) continue;
+        const hostOk = href.includes('sina') || href.includes('163.com') || href.includes('sohu.com');
+        if (!hostOk) continue;
+        if (seen.has(href)) continue;
+        seen.add(href);
+        filtered.push({ title, url: href });
+        if (filtered.length >= limit) break;
+      }
+
+      return filtered;
+    } catch (e) {
+      console.warn('⚠️ 抓取列表失败，回退到模拟数据:', e.message || e);
+      return [];
+    }
+  }
+
+  extractLinks($, selectorList, baseUrl) {
+    const results = [];
+    for (const sel of selectorList) {
+      $(sel).each((_, el) => {
+        const a = $(el);
+        const href = a.attr('href');
+        const title = a.attr('title') || a.text();
+        if (href && title) results.push({ href, title });
+      });
+      if (results.length >= 50) break;
+    }
+    return results;
+  }
+
+  // 爬取新闻（真实爬虫优先，失败回退到模拟数据）
+  async crawlNews(sourceKey, sourceCategoryKey, limit = 20) {
+    try {
+      const source = this.newsSources[sourceKey];
+      if (!source) {
+        throw new Error(`不支持的新闻源: ${sourceKey}`);
+      }
+
+      const unifiedCategoryKey = this.mapToUnifiedCategory(sourceKey, sourceCategoryKey);
+
+      console.log(`开始爬取 ${source.name} - ${unifiedCategoryKey} 新闻...`);
+
+      let articles = await this.scrapeNews(sourceKey, unifiedCategoryKey, limit);
+      const useMock = articles.length === 0;
+
+      if (useMock) {
+        const mockNews = await this.generateMockNews(sourceKey, unifiedCategoryKey, limit);
+        await this.saveNewsBatch(mockNews);
+        console.log(`✅ 成功爬取并保存 ${mockNews.length} 条新闻 (模拟)`);
+        return mockNews;
+      }
+
+      const now = new Date();
+      const categoryId = await this.getCategoryIdByName(unifiedCategoryKey);
+      const toSave = [];
+      for (let i = 0; i < articles.length; i++) {
+        const { title, url } = articles[i];
+        toSave.push({
+          title,
+          content: title,
+          summary: title,
+          source: source.name,
+          sourceUrl: url,
+          imageUrl: null,
+          categoryId,
+          tags: [unifiedCategoryKey],
+          publishTime: new Date(now.getTime() - i * 60000),
+          viewCount: Math.floor(Math.random() * 5000),
+          isHot: Math.random() > 0.7,
+          isTop: Math.random() > 0.9,
+          status: 'published'
+        });
+      }
+
+      const saved = await this.saveNewsBatch(toSave);
+      console.log(`✅ 成功爬取并保存 ${saved.length} 条新闻 (真实)`);
+      return saved;
+    } catch (error) {
+      console.error(`❌ 爬取新闻失败:`, error);
+      throw error;
+    }
+  }
+
+  async saveNewsBatch(list) {
+    const saved = [];
+    for (const item of list) {
+      try {
+        if (item.sourceUrl) {
+          const exists = await News.findOne({ where: { sourceUrl: item.sourceUrl } });
+          if (exists) {
+            continue;
+          }
+        }
+        const news = await News.create(item);
+        saved.push(news);
+      } catch (e) {
+        console.warn('保存新闻失败:', e.message || e);
+      }
+    }
+    return saved;
+  }
+
+  // 生成模拟新闻数据（使用统一分类键；链接指向抓取页）
+  async generateMockNews(sourceKey, unifiedCategoryKey, limit) {
+    const mockNews = [];
+    const now = new Date();
+
+    const categoryMap = {
+      'tech': {
+        keywords: ['人工智能', '区块链', '5G', '云计算', '物联网', '大数据', '机器学习'],
+        companies: ['腾讯', '阿里巴巴', '百度', '华为', '小米', '字节跳动']
+      },
+      'finance': {
+        keywords: ['股市', '基金', '投资', '理财', '房地产', '保险', '银行'],
+        companies: ['工商银行', '建设银行', '招商银行', '平安保险', '中国人寿']
+      },
+      'sports': {
+        keywords: ['足球', '篮球', '网球', '奥运会', '世界杯', 'NBA', '欧冠'],
+        companies: ['皇马', '巴萨', '曼联', '湖人', '勇士']
+      },
+      'ent': {
+        keywords: ['电影', '电视剧', '综艺', '明星', '音乐', '演唱会', '电影节'],
+        companies: ['华谊兄弟', '光线传媒', '万达影视', '博纳影业']
+      },
+      'world': {
+        keywords: ['国际关系', '外交', '贸易', '政治', '经济', '文化', '科技'],
+        companies: ['美国', '欧盟', '日本', '韩国', '俄罗斯', '印度']
+      }
+    };
+
+    const source = this.newsSources[sourceKey];
+    const listUrl = this.getListUrl(sourceKey, unifiedCategoryKey);
+    const categoryConf = categoryMap[unifiedCategoryKey] || categoryMap['tech'];
+    
+    for (let i = 0; i < limit; i++) {
+      const keyword = categoryConf.keywords[Math.floor(Math.random() * categoryConf.keywords.length)];
+      const company = categoryConf.companies[Math.floor(Math.random() * categoryConf.companies.length)];
+      
+      const title = `${keyword}领域重大突破：${company}引领行业新趋势`;
+      const content = `近日，${company}在${keyword}领域取得了重大突破。这一进展不仅推动了整个行业的发展，也为相关技术的应用开辟了新的可能性。专家表示，这一突破将带来深远的影响，预计将在未来几年内改变整个行业的格局。`;
+      
+      const publishTime = new Date(now.getTime() - Math.random() * 24 * 60 * 60 * 1000);
+      
+      mockNews.push({
+        title,
+        content,
+        summary: content.substring(0, 100) + '...',
+        source: source.name,
+        sourceUrl: listUrl,
+        imageUrl: null,
+        categoryId: await this.getCategoryIdByName(unifiedCategoryKey),
+        tags: [unifiedCategoryKey],
+        publishTime,
+        viewCount: Math.floor(Math.random() * 10000),
+        isHot: Math.random() > 0.7,
+        isTop: Math.random() > 0.9,
+        status: 'published'
+      });
+    }
+    
+    return mockNews;
+  }
+
+  // 根据分类名获取分类ID（统一键）
+  async getCategoryIdByName(categoryName) {
+    try {
+      const category = await NewsCategory.findOne({
+        where: { name: categoryName }
+      });
+      return category ? category.id : 1;
+    } catch (error) {
+      console.error('获取分类ID失败:', error);
+      return 1;
+    }
+  }
+
+  // 获取新闻列表
+  async getNewsList(options = {}) {
+    try {
+      const {
+        categoryId,
+        page = 1,
+        limit = 20,
+        sortBy = 'publishTime',
+        sortOrder = 'DESC',
+        isHot = false,
+        isTop = false,
+        search = ''
+      } = options;
+
+      const whereClause = { status: 'published' };
+      
+      if (categoryId) {
+        whereClause.categoryId = categoryId;
+      }
+      
+      if (isHot) {
+        whereClause.isHot = true;
+      }
+      
+      if (isTop) {
+        whereClause.isTop = true;
+      }
+      
+      if (search) {
+        whereClause[Sequelize.Op.or] = [
+          { title: { [Sequelize.Op.like]: `%${search}%` } },
+          { content: { [Sequelize.Op.like]: `%${search}%` } },
+          { tags: { [Sequelize.Op.like]: `%${search}%` } }
+        ];
+      }
+
+      const offset = (page - 1) * limit;
+      
+      const { count, rows } = await News.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ],
+        order: [[sortBy, sortOrder]],
+        limit,
+        offset
+      });
+
+      return {
+        news: rows,
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit)
+      };
+    } catch (error) {
+      console.error('获取新闻列表失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取新闻详情
+  async getNewsDetail(newsId, userId = null) {
+    try {
+      const news = await News.findByPk(newsId, {
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ]
+      });
+
+      if (!news) {
+        throw new Error('新闻不存在');
+      }
+
+      await news.increment('viewCount');
+
+      if (userId) {
+        await this.recordNewsRead(userId, newsId);
+      }
+
+      return news;
+    } catch (error) {
+      console.error('获取新闻详情失败:', error);
+      throw error;
+    }
+  }
+
+  async recordNewsRead(userId, newsId) {
+    try {
+      await NewsReadHistory.create({
+        userId,
+        newsId,
+        readAt: new Date()
+      });
+    } catch (error) {
+      console.error('记录阅读历史失败:', error);
+    }
+  }
+
+  async getHotNews(limit = 10) {
+    try {
+      const hotNews = await News.findAll({
+        where: { 
+          isHot: true,
+          status: 'published'
+        },
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ],
+        order: [['viewCount', 'DESC'], ['publishTime', 'DESC']],
+        limit
+      });
+
+      return hotNews;
+    } catch (error) {
+      console.error('获取热门新闻失败:', error);
+      throw error;
+    }
+  }
+
+  async getTopNews(limit = 5) {
+    try {
+      const topNews = await News.findAll({
+        where: { 
+          isTop: true,
+          status: 'published'
+        },
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ],
+        order: [['publishTime', 'DESC']],
+        limit
+      });
+
+      return topNews;
+    } catch (error) {
+      console.error('获取置顶新闻失败:', error);
+      throw error;
+    }
+  }
+
+  async getNewsCategories() {
+    try {
+      const categories = await NewsCategory.findAll({
+        where: { isActive: true },
+        order: [['sortOrder', 'ASC'], ['name', 'ASC']]
+      });
+
+      return categories;
+    } catch (error) {
+      console.error('获取新闻分类失败:', error);
+      throw error;
+    }
+  }
+
+  async setUserNewsPreference(userId, categoryId, preferences) {
+    try {
+      const [preference, created] = await UserNewsPreference.findOrCreate({
+        where: { userId, categoryId },
+        defaults: {
+          userId,
+          categoryId,
+          isSubscribed: preferences.isSubscribed !== undefined ? preferences.isSubscribed : true,
+          notificationEnabled: preferences.notificationEnabled !== undefined ? preferences.notificationEnabled : false
+        }
+      });
+
+      if (!created) {
+        await preference.update(preferences);
+      }
+
+      return preference;
+    } catch (error) {
+      console.error('设置用户新闻偏好失败:', error);
+      throw error;
+    }
+  }
+
+  async getUserNewsPreferences(userId) {
+    try {
+      const preferences = await UserNewsPreference.findAll({
+        where: { userId },
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ]
+      });
+
+      return preferences;
+    } catch (error) {
+      console.error('获取用户新闻偏好失败:', error);
+      throw error;
+    }
+  }
+
+  async getUserReadHistory(userId, limit = 20) {
+    try {
+      const history = await NewsReadHistory.findAll({
+        where: { userId },
+        include: [
+          {
+            model: News,
+            as: 'news',
+            attributes: ['id', 'title', 'summary', 'imageUrl', 'publishTime'],
+            include: [
+              {
+                model: NewsCategory,
+                as: 'category',
+                attributes: ['name', 'displayName', 'icon', 'color']
+              }
+            ]
+          }
+        ],
+        order: [['readAt', 'DESC']],
+        limit
+      });
+
+      return history;
+    } catch (error) {
+      console.error('获取用户阅读历史失败:', error);
+      throw error;
+    }
+  }
+
+  async searchNews(query, options = {}) {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        categoryId = null
+      } = options;
+
+      const whereClause = {
+        status: 'published',
+        [Sequelize.Op.or]: [
+          { title: { [Sequelize.Op.like]: `%${query}%` } },
+          { content: { [Sequelize.Op.like]: `%${query}%` } },
+          { summary: { [Sequelize.Op.like]: `%${query}%` } },
+          { tags: { [Sequelize.Op.like]: `%${query}%` } }
+        ]
+      };
+
+      if (categoryId) {
+        whereClause.categoryId = categoryId;
+      }
+
+      const offset = (page - 1) * limit;
+      
+      const { count, rows } = await News.findAndCountAll({
+        where: whereClause,
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName', 'icon', 'color']
+          }
+        ],
+        order: [['publishTime', 'DESC']],
+        limit,
+        offset
+      });
+
+      return {
+        news: rows,
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit),
+        query
+      };
+    } catch (error) {
+      console.error('搜索新闻失败:', error);
+      throw error;
+    }
+  }
+
+  async cleanupExpiredNews(daysToKeep = 30) {
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+      const deletedCount = await News.destroy({
+        where: {
+          publishTime: {
+            [Sequelize.Op.lt]: cutoffDate
+          },
+          status: 'published'
+        }
+      });
+
+      console.log(`清理了 ${deletedCount} 条过期新闻`);
+      return deletedCount;
+    } catch (error) {
+      console.error('清理过期新闻失败:', error);
+      throw error;
+    }
+  }
+
+  async getNewsStats() {
+    try {
+      const [totalNews, totalCategories, hotNewsCount, topNewsCount] = await Promise.all([
+        News.count({ where: { status: 'published' } }),
+        NewsCategory.count({ where: { isActive: true } }),
+        News.count({ where: { isHot: true, status: 'published' } }),
+        News.count({ where: { isTop: true, status: 'published' } })
+      ]);
+
+      const categoryStats = await News.findAll({
+        where: { status: 'published' },
+        include: [
+          {
+            model: NewsCategory,
+            as: 'category',
+            attributes: ['name', 'displayName']
+          }
+        ],
+        attributes: [
+          'categoryId',
+          [Sequelize.fn('COUNT', Sequelize.col('News.id')), 'count']
+        ],
+        group: ['categoryId'],
+        raw: true
+      });
+
+      return {
+        totalNews,
+        totalCategories,
+        hotNewsCount,
+        topNewsCount,
+        categoryStats
+      };
+    } catch (error) {
+      console.error('获取新闻统计失败:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = new NewsService(); 

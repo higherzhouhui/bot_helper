@@ -1,0 +1,45 @@
+{
+  "name": "telegram-reminder-bot",
+  "version": "1.0.0",
+  "description": "智能提醒助手 + 新闻资讯机器人",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "nodemon src/bot.js",
+    "init-db": "node src/init-db.js",
+    "crawl-news": "node src/scripts/crawlNews.js",
+    "crawl-work": "node src/scripts/crawlWork.js",
+    "build": "esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js && esbuild src/scripts/crawlWork.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlWork.js",
+    "start:dist": "node dist/bot.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:logs": "pm2 logs --lines 200"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "reminder",
+    "news",
+    "assistant"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.64.0",
+    "sequelize": "^6.35.2",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "nodemon": "^3.0.2",
+    "pm2": "^5.4.3"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
