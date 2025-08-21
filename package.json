@@ -6,10 +6,12 @@
   "scripts": {
     "start": "NODE_ENV=production node src/bot.js",
     "dev": "set NODE_ENV=development && nodemon src/bot.js",
+    "dev:optimized": "NODE_ENV=development nodemon src/bot-optimized.js",
+    "dev:optimized:win": "set NODE_ENV=development && nodemon src/bot-optimized.js",
+    "start:optimized": "NODE_ENV=production node src/bot-optimized.js",
     "init-db": "node src/init-db.js",
     "crawl-news": "node src/scripts/crawlNews.js",
-    "crawl-work": "node src/scripts/crawlWork.js",
-    "build": "esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js && esbuild src/scripts/crawlWork.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlWork.js",
+    "build": "esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js",
     "start:dist": "NODE_ENV=production node dist/bot.js",
     "start:dist:dev": "NODE_ENV=development node dist/bot.js",
     "pm2:start": "pm2 start ecosystem.config.js",
@@ -27,7 +29,7 @@
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.2
+    "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",

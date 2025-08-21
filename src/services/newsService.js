@@ -45,6 +45,7 @@ class NewsService {
 
     // 系统统一分类（与 NewsCategory.name 一致）
     this.defaultCategories = [
+      { name: 'web3', displayName: 'Web3', icon: '🕸️', color: '#8A2BE2', sortOrder: 0 },
       { name: 'tech', displayName: '科技', icon: '🚀', color: '#FF6B6B', sortOrder: 1 },
       { name: 'finance', displayName: '财经', icon: '💰', color: '#4ECDC4', sortOrder: 2 },
       { name: 'sports', displayName: '体育', icon: '⚽', color: '#45B7D1', sortOrder: 3 },
@@ -190,6 +191,75 @@ class NewsService {
       if (results.length >= 50) break;
     }
     return results;
+  }
+
+  // Web3 资讯抓取（ChainFeeds / PANews / Investing 中文）
+  async crawlWeb3(sourceKey, limit = 20) {
+    try {
+      const sources = {
+        chainfeeds: { name: 'ChainFeeds', baseUrl: 'https://www.chainfeeds.xyz/', host: 'chainfeeds.xyz' },
+        panews: { name: 'PANews', baseUrl: 'https://www.panewslab.com/zh', host: 'panewslab.com' },
+        investing_cn: { name: 'Investing中文', baseUrl: 'https://cn.investing.com', host: 'cn.investing.com' }
+      };
+
+      const conf = sources[sourceKey];
+      if (!conf) throw new Error(`不支持的 Web3 来源: ${sourceKey}`);
+
+      const html = await this.requestPage(conf.baseUrl, conf.baseUrl);
+      const $ = cheerio.load(html);
+
+      const candidates = [
+        'a[title]',
+        'a[href^="http"]',
+        'h1 a, h2 a, h3 a',
+        '.article a, .news a, .item a, .card a'
+      ];
+
+      let items = this.extractLinks($, candidates, conf.baseUrl);
+
+      const seen = new Set();
+      const filtered = [];
+      for (const it of items) {
+        const title = this.cleanTitle(it.title);
+        const href = this.absoluteUrl(conf.baseUrl, it.href);
+        if (!title || title.length < 6) continue;
+        if (!href || href.startsWith('javascript:')) continue;
+        if (!(href.includes(conf.host))) continue; // 限定站点
+        if (seen.has(href)) continue;
+        seen.add(href);
+        filtered.push({ title, url: href });
+        if (filtered.length >= limit) break;
+      }
+
+      const now = new Date();
+      const categoryId = await this.getCategoryIdByName('web3');
+      const toSave = [];
+      for (let i = 0; i < filtered.length; i++) {
+        const { title, url } = filtered[i];
+        toSave.push({
+          title,
+          content: title,
+          summary: title,
+          source: conf.name,
+          sourceUrl: url,
+          imageUrl: null,
+          categoryId,
+          tags: ['web3'],
+          publishTime: new Date(now.getTime() - i * 60000),
+          viewCount: Math.floor(Math.random() * 5000),
+          isHot: Math.random() > 0.7,
+          isTop: Math.random() > 0.9,
+          status: 'published'
+        });
+      }
+
+      const saved = await this.saveNewsBatch(toSave);
+      console.log(`✅ 成功爬取并保存 ${saved.length} 条 Web3 资讯: ${conf.name}`);
+      return saved;
+    } catch (error) {
+      console.error('❌ 爬取 Web3 资讯失败:', error);
+      throw error;
+    }
   }
 
   // 爬取新闻（真实爬虫优先，失败回退到模拟数据）
@@ -499,9 +569,8 @@ class NewsService {
     try {
       const categories = await NewsCategory.findAll({
         where: { isActive: true },
-        order: [['sortOrder', 'ASC'], ['name', 'ASC']]
+        order: [['sortOrder', 'ASC']]
       });
-
       return categories;
     } catch (error) {
       console.error('获取新闻分类失败:', error);
@@ -509,146 +578,96 @@ class NewsService {
     }
   }
 
-  async setUserNewsPreference(userId, categoryId, preferences) {
+  async setUserNewsPreference(userId, categoryId, isSubscribed) {
     try {
-      const [preference, created] = await UserNewsPreference.findOrCreate({
+      const [pref, created] = await UserNewsPreference.findOrCreate({
         where: { userId, categoryId },
-        defaults: {
-          userId,
-          categoryId,
-          isSubscribed: preferences.isSubscribed !== undefined ? preferences.isSubscribed : true,
-          notificationEnabled: preferences.notificationEnabled !== undefined ? preferences.notificationEnabled : false
-        }
+        defaults: { isSubscribed }
       });
 
       if (!created) {
-        await preference.update(preferences);
+        await pref.update({ isSubscribed });
       }
 
-      return preference;
+      return pref;
     } catch (error) {
-      console.error('设置用户新闻偏好失败:', error);
+      console.error('设置新闻偏好失败:', error);
       throw error;
     }
   }
 
   async getUserNewsPreferences(userId) {
     try {
-      const preferences = await UserNewsPreference.findAll({
-        where: { userId },
-        include: [
-          {
-            model: NewsCategory,
-            as: 'category',
-            attributes: ['name', 'displayName', 'icon', 'color']
-          }
-        ]
-      });
-
-      return preferences;
+      const prefs = await UserNewsPreference.findAll({ where: { userId } });
+      return prefs;
     } catch (error) {
-      console.error('获取用户新闻偏好失败:', error);
+      console.error('获取新闻偏好失败:', error);
       throw error;
     }
   }
 
-  async getUserReadHistory(userId, limit = 20) {
+  async getUserReadHistory(userId, page = 1, limit = 20) {
     try {
-      const history = await NewsReadHistory.findAll({
+      const offset = (page - 1) * limit;
+      const { count, rows } = await NewsReadHistory.findAndCountAll({
         where: { userId },
         include: [
           {
             model: News,
             as: 'news',
-            attributes: ['id', 'title', 'summary', 'imageUrl', 'publishTime'],
             include: [
-              {
-                model: NewsCategory,
-                as: 'category',
-                attributes: ['name', 'displayName', 'icon', 'color']
-              }
+              { model: NewsCategory, as: 'category', attributes: ['name', 'displayName'] }
             ]
           }
         ],
         order: [['readAt', 'DESC']],
-        limit
+        limit,
+        offset
       });
 
-      return history;
+      return { history: rows, total: count, page, limit, totalPages: Math.ceil(count / limit) };
     } catch (error) {
-      console.error('获取用户阅读历史失败:', error);
+      console.error('获取阅读历史失败:', error);
       throw error;
     }
   }
 
-  async searchNews(query, options = {}) {
+  async searchNews(keyword, options = {}) {
     try {
-      const {
-        page = 1,
-        limit = 20,
-        categoryId = null
-      } = options;
+      const { page = 1, limit = 20 } = options;
+      const offset = (page - 1) * limit;
 
       const whereClause = {
         status: 'published',
         [Sequelize.Op.or]: [
-          { title: { [Sequelize.Op.like]: `%${query}%` } },
-          { content: { [Sequelize.Op.like]: `%${query}%` } },
-          { summary: { [Sequelize.Op.like]: `%${query}%` } },
-          { tags: { [Sequelize.Op.like]: `%${query}%` } }
+          { title: { [Sequelize.Op.like]: `%${keyword}%` } },
+          { content: { [Sequelize.Op.like]: `%${keyword}%` } },
+          { tags: { [Sequelize.Op.like]: `%${keyword}%` } }
         ]
       };
 
-      if (categoryId) {
-        whereClause.categoryId = categoryId;
-      }
-
-      const offset = (page - 1) * limit;
-      
       const { count, rows } = await News.findAndCountAll({
         where: whereClause,
         include: [
-          {
-            model: NewsCategory,
-            as: 'category',
-            attributes: ['name', 'displayName', 'icon', 'color']
-          }
+          { model: NewsCategory, as: 'category', attributes: ['name', 'displayName'] }
         ],
         order: [['publishTime', 'DESC']],
         limit,
         offset
       });
 
-      return {
-        news: rows,
-        total: count,
-        page,
-        limit,
-        totalPages: Math.ceil(count / limit),
-        query
-      };
+      return { news: rows, total: count, page, limit, totalPages: Math.ceil(count / limit) };
     } catch (error) {
       console.error('搜索新闻失败:', error);
       throw error;
     }
   }
 
-  async cleanupExpiredNews(daysToKeep = 30) {
+  async cleanupExpiredNews(days = 30) {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
-      const deletedCount = await News.destroy({
-        where: {
-          publishTime: {
-            [Sequelize.Op.lt]: cutoffDate
-          },
-          status: 'published'
-        }
-      });
-
-      console.log(`清理了 ${deletedCount} 条过期新闻`);
-      return deletedCount;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const deleted = await News.destroy({ where: { publishTime: { [Sequelize.Op.lt]: cutoff } } });
+      return deleted;
     } catch (error) {
       console.error('清理过期新闻失败:', error);
       throw error;

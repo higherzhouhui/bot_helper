@@ -29,6 +29,11 @@ class SmartParser {
     this.tagRegex = /#(\w+)/g;
   }
 
+  // 新增：兼容方法名
+  parseTime(text) {
+    return this.parseTimeExpression(text);
+  }
+
   // 智能解析提醒文本
   parseReminderText(text) {
     const result = {

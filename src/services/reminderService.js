@@ -257,7 +257,7 @@ class ReminderService {
     }
   }
 
-  // 延后提醒
+  // 延后提醒（设置到新时间）
   async delayReminder(reminderId, newTime) {
     try {
       const reminder = await Reminder.findByPk(reminderId);
@@ -278,7 +278,7 @@ class ReminderService {
     }
   }
 
-  // 小睡提醒
+  // 小睡提醒（记录小睡到何时）
   async snoozeReminder(reminderId, snoozeUntil) {
     try {
       const reminder = await Reminder.findByPk(reminderId);
@@ -572,6 +572,59 @@ class ReminderService {
     } catch (error) {
       console.error('批量更新提醒失败:', error);
       throw error;
+    }
+  }
+
+  // 新增：获取到期提醒
+  async getDueReminders() {
+    try {
+      const now = new Date();
+      const reminders = await Reminder.findAll({
+        where: {
+          [Sequelize.Op.or]: [
+            { reminderTime: { [Sequelize.Op.lte]: now }, status: 'pending' },
+            { snoozeUntil: { [Sequelize.Op.lte]: now }, status: 'snoozed' }
+          ]
+        },
+        include: [
+          {
+            model: Category,
+            as: 'category',
+            attributes: ['name', 'icon', 'color']
+          }
+        ],
+        order: [['reminderTime', 'ASC']]
+      });
+      return reminders;
+    } catch (error) {
+      console.error('获取到期提醒失败:', error);
+      throw error;
+    }
+  }
+
+  // 新增：记录提醒已发送（增加 repeatCount，保留状态以便继续提醒机制扩展）
+  async recordReminderSent(reminderId) {
+    try {
+      const reminder = await Reminder.findByPk(reminderId);
+      if (!reminder) return false;
+      await reminder.update({ repeatCount: (reminder.repeatCount || 0) + 1 });
+      // 可选：写入历史表
+      await ReminderHistory.create({
+        reminderId: reminder.id,
+        userId: reminder.userId,
+        chatId: reminder.chatId,
+        message: reminder.message,
+        reminderTime: reminder.reminderTime,
+        repeatCount: reminder.repeatCount,
+        actionType: 'notified',
+        categoryId: reminder.categoryId,
+        priority: reminder.priority,
+        tags: reminder.tags
+      });
+      return true;
+    } catch (error) {
+      console.error('记录提醒发送失败:', error);
+      return false;
     }
   }
 }

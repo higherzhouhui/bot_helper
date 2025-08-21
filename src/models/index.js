@@ -479,41 +479,7 @@ const NewsReadHistory = sequelize.define('NewsReadHistory', {
   timestamps: true
 });
 
-// 新增：工作帖子模型（掘金/电鸭 等）
-const WorkPost = sequelize.define('WorkPost', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  title: {
-    type: Sequelize.STRING,
-    allowNull: false
-  },
-  url: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    unique: true
-  },
-  source: {
-    type: Sequelize.STRING,
-    allowNull: false // juejin / eleduck
-  },
-  summary: {
-    type: Sequelize.TEXT,
-    allowNull: true
-  },
-  publishTime: {
-    type: Sequelize.DATE,
-    allowNull: true,
-    field: 'publish_time'
-  }
-}, {
-  tableName: 'work_posts',
-  timestamps: true
-});
-
-// 定义关联关系
+// 关联关系
 User.hasMany(Category, { foreignKey: 'userId', as: 'categories' });
 Category.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
@@ -575,6 +541,5 @@ module.exports = {
   News,
   UserNewsPreference,
   NewsReadHistory,
-  WorkPost,
   testConnection
 }; 
