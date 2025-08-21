@@ -188,8 +188,7 @@ class CommandHandler {
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '✏️ 修改', callback_data: `edit_${reminder.id}` },
-            { text: '❌ 取消', callback_data: `cancel_${reminder.id}` }
+            { text: '✏️ 修改', callback_data: `edit_${reminder.id}` }
           ]
         ]
       };
