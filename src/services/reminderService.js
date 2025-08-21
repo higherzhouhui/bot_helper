@@ -477,6 +477,19 @@ class ReminderService {
     }
   }
 
+  // 新增：清理已完成提醒（主动表与历史表）
+  async cleanupCompletedReminders(userId) {
+    try {
+      const deletedActive = await Reminder.destroy({ where: { userId, status: 'completed' } });
+      const deletedHistory = await ReminderHistory.destroy({ where: { userId, actionType: 'completed' } });
+      const deletedCount = (deletedActive || 0) + (deletedHistory || 0);
+      return { deletedCount };
+    } catch (error) {
+      console.error('清理已完成提醒失败:', error);
+      throw error;
+    }
+  }
+
   // 获取统计信息
   async getStats(userId) {
     try {
@@ -516,13 +529,27 @@ class ReminderService {
         raw: true
       });
 
+      // 规范化优先级计数
+      const priorityCountMap = { urgent: 0, high: 0, normal: 0, low: 0 };
+      for (const row of priorityStats) {
+        const key = row.priority;
+        const val = parseInt(row.count, 10) || 0;
+        if (priorityCountMap[key] !== undefined) {
+          priorityCountMap[key] = val;
+        }
+      }
+
       return {
         total: totalReminders,
         completed: completedReminders,
         pending: pendingReminders,
         categories: categories,
         categoryStats,
-        priorityStats
+        priorityStats,
+        urgent: priorityCountMap.urgent,
+        high: priorityCountMap.high,
+        normal: priorityCountMap.normal,
+        low: priorityCountMap.low
       };
     } catch (error) {
       console.error('获取统计信息失败:', error);

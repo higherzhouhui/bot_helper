@@ -8,6 +8,7 @@ const ErrorHandler = require('./middlewares/errorHandler');
 const reminderService = require('./services/reminderService');
 const newsService = require('./services/newsService');
 const SmartParser = require('./utils/smartParser');
+const userService = require('./services/userService');
 
 class TelegramReminderBot {
   constructor() {
@@ -89,6 +90,42 @@ class TelegramReminderBot {
         await this.newsHandler.handleWeb3Command(msg);
       } catch (error) {
         await this.errorHandler.handleError(error, msg.chat.id, 'web3_command');
+      }
+    });
+
+    // 新增：/brief 个性化简报
+    this.bot.onText(/\/brief/, async (msg) => {
+      try {
+        await this.commandHandler.handleBriefCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'brief_command');
+      }
+    });
+
+    // 新增：/subscribe 关键词订阅
+    this.bot.onText(/^\/subscribe( .+)?$/, async (msg) => {
+      try {
+        await this.commandHandler.handleSubscribeCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'subscribe_command');
+      }
+    });
+
+    // 新增：/favorites 收藏夹
+    this.bot.onText(/\/favorites/, async (msg) => {
+      try {
+        await this.commandHandler.handleFavoritesCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'favorites_command');
+      }
+    });
+
+    // 新增：/quiet 安静时段
+    this.bot.onText(/^\/quiet( .+)?$/, async (msg) => {
+      try {
+        await this.commandHandler.handleQuietCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'quiet_command');
       }
     });
 
@@ -275,7 +312,8 @@ class TelegramReminderBot {
       } else if (data.startsWith('web3_')) {
         await this.newsHandler.handleWeb3Callback(callbackQuery);
       } else if (data.startsWith('create_') || data.startsWith('my_') || 
-                 data === 'help' || data === 'stats' || data.startsWith('back_to_')) {
+                 data === 'help' || data === 'stats' || data.startsWith('back_to_') ||
+                 data === 'reminder_stats' || data === 'search_reminders' || data === 'cleanup_completed') {
         await this.commandHandler.handleCommandCallback(callbackQuery);
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 未知操作');
@@ -480,7 +518,7 @@ class TelegramReminderBot {
 
   // 启动定时任务
   startScheduledTasks() {
-    // 启动新闻爬取任务（按轮询源/分类，避免无参调用）
+    // 新闻爬取轮询
     const newsTasks = [
       { source: 'sina', cat: 'tech' },
       { source: '163', cat: 'tech' },
@@ -495,12 +533,11 @@ class TelegramReminderBot {
         newsIdx++;
         await newsService.crawlNews(t.source, t.cat, 15);
       } catch (error) {
-        // 仅记录，不打断循环
         console.error('新闻爬取任务失败:', error.message || error);
       }
     }, config.NEWS_CRAWL_INTERVAL * 1000);
 
-    // 启动 Web3 资讯爬取轮询
+    // Web3 轮询
     const web3Tasks = ['chainfeeds', 'panews', 'investing_cn'];
     let widx = 0;
     setInterval(async () => {
@@ -512,6 +549,27 @@ class TelegramReminderBot {
         console.error('Web3 爬取任务失败:', error.message || error);
       }
     }, Math.max(60, Math.floor(config.NEWS_CRAWL_INTERVAL / 2)) * 1000);
+
+    // 个性化简报：每分钟检查一次，匹配 HH:mm
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        const pad = (n) => (n < 10 ? '0' + n : '' + n);
+        const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        const userIds = await userService.getUsersToBriefAt(hhmm);
+        for (const uid of userIds) {
+          const inQuiet = await userService.isInQuietHours(uid, now);
+          if (inQuiet) {
+            // 简化实现：静默时段内先跳过发送（可扩展为摘要队列）
+            continue;
+          }
+          const brief = await newsService.getPersonalizedBrief(uid, 8);
+          await this.bot.sendMessage(uid, brief, { parse_mode: 'HTML', disable_web_page_preview: true });
+        }
+      } catch (e) {
+        console.error('发送个性化简报失败:', e.message || e);
+      }
+    }, 60 * 1000);
 
     console.log('🔄 定时任务已启动');
   }

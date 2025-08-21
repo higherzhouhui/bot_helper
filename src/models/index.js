@@ -191,17 +191,12 @@ const ReminderHistory = sequelize.define('ReminderHistory', {
   },
   message: {
     type: Sequelize.TEXT,
-    allowNull: false
+    allowNull: true
   },
   reminderTime: {
     type: Sequelize.DATE,
-    allowNull: false,
+    allowNull: true,
     field: 'reminder_time'
-  },
-  completedAt: {
-    type: Sequelize.DATE,
-    defaultValue: Sequelize.NOW,
-    field: 'completed_at'
   },
   repeatCount: {
     type: Sequelize.INTEGER,
@@ -210,10 +205,8 @@ const ReminderHistory = sequelize.define('ReminderHistory', {
   },
   actionType: {
     type: Sequelize.STRING,
-    defaultValue: 'completed',
-    validate: {
-      isIn: [['completed', 'deleted', 'expired', 'snoozed']]
-    }
+    defaultValue: 'notified',
+    field: 'action_type'
   },
   categoryId: {
     type: Sequelize.INTEGER,
@@ -222,8 +215,7 @@ const ReminderHistory = sequelize.define('ReminderHistory', {
   },
   priority: {
     type: Sequelize.STRING,
-    defaultValue: 'normal',
-    allowNull: true
+    defaultValue: 'normal'
   },
   tags: {
     type: Sequelize.TEXT,
@@ -241,241 +233,123 @@ const ReminderHistory = sequelize.define('ReminderHistory', {
   timestamps: true
 });
 
-// 定义提醒模板模型
+// 模板
 const ReminderTemplate = sequelize.define('ReminderTemplate', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  userId: {
-    type: Sequelize.BIGINT,
-    allowNull: false,
-    field: 'user_id'
-  },
-  name: {
-    type: Sequelize.STRING,
-    allowNull: false
-  },
-  message: {
-    type: Sequelize.TEXT,
-    allowNull: false
-  },
-  categoryId: {
-    type: Sequelize.INTEGER,
-    allowNull: true,
-    field: 'category_id'
-  },
-  priority: {
-    type: Sequelize.STRING,
-    defaultValue: 'normal',
-    allowNull: true
-  },
-  tags: {
-    type: Sequelize.TEXT,
-    allowNull: true,
-    get() {
-      const rawValue = this.getDataValue('tags');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('tags', JSON.stringify(value));
-    }
-  },
-  isPublic: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false,
-    field: 'is_public'
-  }
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: true, field: 'user_id' },
+  name: { type: Sequelize.STRING, allowNull: false },
+  message: { type: Sequelize.TEXT, allowNull: false },
+  defaultTime: { type: Sequelize.STRING, allowNull: true, field: 'default_time' },
+  categoryId: { type: Sequelize.INTEGER, allowNull: true, field: 'category_id' }
 }, {
   tableName: 'reminder_templates',
   timestamps: true
 });
 
-// 定义新闻分类模型
+// 新闻分类
 const NewsCategory = sequelize.define('NewsCategory', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  name: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    unique: true
-  },
-  displayName: {
-    type: Sequelize.STRING,
-    allowNull: false,
-    field: 'display_name'
-  },
-  icon: {
-    type: Sequelize.STRING,
-    defaultValue: '📰',
-    allowNull: true
-  },
-  color: {
-    type: Sequelize.STRING,
-    defaultValue: '#007AFF',
-    allowNull: true
-  },
-  sortOrder: {
-    type: Sequelize.INTEGER,
-    defaultValue: 0,
-    field: 'sort_order'
-  },
-  isActive: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
-    field: 'is_active'
-  }
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  name: { type: Sequelize.STRING, allowNull: false, unique: true },
+  displayName: { type: Sequelize.STRING, allowNull: true },
+  icon: { type: Sequelize.STRING, allowNull: true },
+  color: { type: Sequelize.STRING, allowNull: true },
+  isActive: { type: Sequelize.BOOLEAN, defaultValue: true },
+  sortOrder: { type: Sequelize.INTEGER, defaultValue: 0, field: 'sort_order' }
 }, {
   tableName: 'news_categories',
   timestamps: true
 });
 
-// 定义新闻模型
+// 新闻
 const News = sequelize.define('News', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  title: {
-    type: Sequelize.STRING,
-    allowNull: false
-  },
-  content: {
-    type: Sequelize.TEXT,
-    allowNull: false
-  },
-  summary: {
-    type: Sequelize.TEXT,
-    allowNull: true
-  },
-  source: {
-    type: Sequelize.STRING,
-    allowNull: false
-  },
-  sourceUrl: {
-    type: Sequelize.STRING,
-    allowNull: true,
-    field: 'source_url'
-  },
-  imageUrl: {
-    type: Sequelize.STRING,
-    allowNull: true,
-    field: 'image_url'
-  },
-  categoryId: {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-    field: 'category_id'
-  },
-  tags: {
-    type: Sequelize.TEXT,
-    allowNull: true,
-    get() {
-      const rawValue = this.getDataValue('tags');
-      return rawValue ? JSON.parse(rawValue) : [];
-    },
-    set(value) {
-      this.setDataValue('tags', JSON.stringify(value));
-    }
-  },
-  publishTime: {
-    type: Sequelize.DATE,
-    allowNull: false,
-    field: 'publish_time'
-  },
-  viewCount: {
-    type: Sequelize.INTEGER,
-    defaultValue: 0,
-    field: 'view_count'
-  },
-  isHot: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false,
-    field: 'is_hot'
-  },
-  isTop: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false,
-    field: 'is_top'
-  },
-  status: {
-    type: Sequelize.STRING,
-    defaultValue: 'published',
-    validate: {
-      isIn: [['draft', 'published', 'archived']]
-    }
-  }
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  title: { type: Sequelize.STRING, allowNull: false },
+  content: { type: Sequelize.TEXT, allowNull: true },
+  summary: { type: Sequelize.TEXT, allowNull: true },
+  source: { type: Sequelize.STRING, allowNull: true },
+  sourceUrl: { type: Sequelize.STRING, allowNull: true, unique: true, field: 'source_url' },
+  imageUrl: { type: Sequelize.STRING, allowNull: true, field: 'image_url' },
+  categoryId: { type: Sequelize.INTEGER, allowNull: true, field: 'category_id' },
+  tags: { type: Sequelize.STRING, allowNull: true },
+  publishTime: { type: Sequelize.DATE, allowNull: true, field: 'publish_time' },
+  viewCount: { type: Sequelize.INTEGER, defaultValue: 0, field: 'view_count' },
+  isHot: { type: Sequelize.BOOLEAN, defaultValue: false, field: 'is_hot' },
+  isTop: { type: Sequelize.BOOLEAN, defaultValue: false, field: 'is_top' },
+  status: { type: Sequelize.STRING, defaultValue: 'published' }
 }, {
   tableName: 'news',
   timestamps: true
 });
 
-// 定义用户新闻偏好模型
+// 用户新闻偏好
 const UserNewsPreference = sequelize.define('UserNewsPreference', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  userId: {
-    type: Sequelize.BIGINT,
-    allowNull: false,
-    field: 'user_id'
-  },
-  categoryId: {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-    field: 'category_id'
-  },
-  isSubscribed: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: true,
-    field: 'is_subscribed'
-  },
-  notificationEnabled: {
-    type: Sequelize.BOOLEAN,
-    defaultValue: false,
-    field: 'notification_enabled'
-  }
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: false, field: 'user_id' },
+  categoryId: { type: Sequelize.INTEGER, allowNull: false, field: 'category_id' },
+  isSubscribed: { type: Sequelize.BOOLEAN, defaultValue: true, field: 'is_subscribed' }
 }, {
   tableName: 'user_news_preferences',
   timestamps: true
 });
 
-// 定义新闻阅读历史模型
+// 新闻阅读历史
 const NewsReadHistory = sequelize.define('NewsReadHistory', {
-  id: {
-    type: Sequelize.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
-  },
-  userId: {
-    type: Sequelize.BIGINT,
-    allowNull: false,
-    field: 'user_id'
-  },
-  newsId: {
-    type: Sequelize.INTEGER,
-    allowNull: false,
-    field: 'news_id'
-  },
-  readAt: {
-    type: Sequelize.DATE,
-    defaultValue: Sequelize.NOW,
-    field: 'read_at'
-  },
-  readDuration: {
-    type: Sequelize.INTEGER,
-    defaultValue: 0,
-    field: 'read_duration'
-  }
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: false, field: 'user_id' },
+  newsId: { type: Sequelize.INTEGER, allowNull: false, field: 'news_id' },
+  readAt: { type: Sequelize.DATE, defaultValue: Sequelize.NOW, field: 'read_at' },
+  readDuration: { type: Sequelize.INTEGER, defaultValue: 0, field: 'read_duration' }
 }, {
   tableName: 'news_read_history',
+  timestamps: true
+});
+
+// 新增：用户设置（简报/安静时段/键盘偏好）
+const UserSetting = sequelize.define('UserSetting', {
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: false, unique: true, field: 'user_id' },
+  briefMorningTime: { type: Sequelize.STRING, allowNull: true, field: 'brief_morning_time' }, // HH:mm
+  briefEveningTime: { type: Sequelize.STRING, allowNull: true, field: 'brief_evening_time' }, // HH:mm
+  quietStart: { type: Sequelize.STRING, allowNull: true, field: 'quiet_start' }, // HH:mm
+  quietEnd: { type: Sequelize.STRING, allowNull: true, field: 'quiet_end' },   // HH:mm
+  replyKeyboardEnabled: { type: Sequelize.BOOLEAN, defaultValue: false, field: 'reply_keyboard_enabled' }
+}, {
+  tableName: 'user_settings',
+  timestamps: true
+});
+
+// 新增：关键词订阅
+const KeywordSubscription = sequelize.define('KeywordSubscription', {
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: false, field: 'user_id' },
+  keyword: { type: Sequelize.STRING, allowNull: false }
+}, {
+  tableName: 'keyword_subscriptions',
+  timestamps: true
+});
+
+// 新增：新闻收藏
+const FavoriteNews = sequelize.define('FavoriteNews', {
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: false, field: 'user_id' },
+  newsId: { type: Sequelize.INTEGER, allowNull: false, field: 'news_id' }
+}, {
+  tableName: 'favorite_news',
+  timestamps: true,
+  indexes: [
+    { unique: true, fields: ['user_id', 'news_id'] }
+  ]
+});
+
+// 新增：埋点事件（用于 A/B 与行为分析）
+const AnalyticsEvent = sequelize.define('AnalyticsEvent', {
+  id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
+  userId: { type: Sequelize.BIGINT, allowNull: true, field: 'user_id' },
+  eventType: { type: Sequelize.STRING, allowNull: false, field: 'event_type' },
+  payload: { type: Sequelize.TEXT, allowNull: true, get() { const v = this.getDataValue('payload'); return v ? JSON.parse(v) : null; }, set(value) { this.setDataValue('payload', JSON.stringify(value)); } },
+  occurredAt: { type: Sequelize.DATE, defaultValue: Sequelize.NOW, field: 'occurred_at' }
+}, {
+  tableName: 'analytics_events',
   timestamps: true
 });
 
@@ -518,6 +392,22 @@ NewsReadHistory.belongsTo(News, { foreignKey: 'newsId', as: 'news' });
 Category.hasMany(ReminderHistory, { foreignKey: 'categoryId', as: 'reminderHistory' });
 ReminderHistory.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
 
+// 新增关联
+User.hasOne(UserSetting, { foreignKey: 'userId', as: 'setting' });
+UserSetting.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+User.hasMany(KeywordSubscription, { foreignKey: 'userId', as: 'keywordSubscriptions' });
+KeywordSubscription.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+User.hasMany(FavoriteNews, { foreignKey: 'userId', as: 'favorites' });
+FavoriteNews.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+News.hasMany(FavoriteNews, { foreignKey: 'newsId', as: 'favoritedBy' });
+FavoriteNews.belongsTo(News, { foreignKey: 'newsId', as: 'news' });
+
+User.hasMany(AnalyticsEvent, { foreignKey: 'userId', as: 'analyticsEvents' });
+AnalyticsEvent.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 // 测试数据库连接
 async function testConnection() {
   try {
@@ -541,5 +431,9 @@ module.exports = {
   News,
   UserNewsPreference,
   NewsReadHistory,
+  UserSetting,
+  KeywordSubscription,
+  FavoriteNews,
+  AnalyticsEvent,
   testConnection
 }; 

@@ -1,6 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { NewsCategory, News, UserNewsPreference, NewsReadHistory } = require('../models');
+const { NewsCategory, News, UserNewsPreference, NewsReadHistory, KeywordSubscription, FavoriteNews } = require('../models');
 const Sequelize = require('sequelize');
 
 class NewsService {
@@ -710,6 +710,59 @@ class NewsService {
     } catch (error) {
       console.error('获取新闻统计失败:', error);
       throw error;
+    }
+  }
+
+  async getPersonalizedBrief(userId, limit = 8) {
+    try {
+      const [keywordsRows, favoritesRows, recentReads] = await Promise.all([
+        KeywordSubscription.findAll({ where: { userId } }),
+        FavoriteNews.findAll({ where: { userId }, include: [{ model: News, as: 'news' }] }),
+        NewsReadHistory.findAll({ where: { userId }, order: [['readAt', 'DESC']], limit: 50, include: [{ model: News, as: 'news' }] })
+      ]);
+
+      const keywords = keywordsRows.map(r => r.keyword.toLowerCase());
+      const favoriteIds = new Set(favoritesRows.map(r => r.newsId));
+      const readIds = new Set(recentReads.map(r => r.newsId));
+
+      const where = { status: 'published' };
+      if (keywords.length > 0) {
+        where[Sequelize.Op.or] = keywords.map(kw => ({
+          [Sequelize.Op.or]: [
+            { title: { [Sequelize.Op.like]: `%${kw}%` } },
+            { content: { [Sequelize.Op.like]: `%${kw}%` } },
+            { tags: { [Sequelize.Op.like]: `%${kw}%` } }
+          ]
+        }));
+      }
+
+      const candidates = await News.findAll({ where, order: [['publishTime', 'DESC']], limit: 50 });
+      const picked = [];
+      for (const n of candidates) {
+        if (readIds.has(n.id)) continue; // 未读优先
+        picked.push(n);
+        if (picked.length >= limit) break;
+      }
+      if (picked.length < limit) {
+        for (const n of candidates) {
+          if (!picked.includes(n)) picked.push(n);
+          if (picked.length >= limit) break;
+        }
+      }
+
+      let message = '🗞️ 个性化简报\n\n';
+      picked.forEach((item, index) => {
+        const url = item.sourceUrl || '#';
+        const title = (item.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const star = favoriteIds.has(item.id) ? '⭐ ' : '';
+        message += `${index + 1}. ${star}<a href="${url}">${title}</a>\n`;
+        message += `   来源：${item.source || '-'}  时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
+      });
+      if (picked.length === 0) message += '暂无合适内容，建议添加一些关键词订阅。';
+      return message;
+    } catch (e) {
+      console.error('生成个性化简报失败:', e);
+      return '🗞️ 个性化简报生成失败，请稍后重试';
     }
   }
 }
