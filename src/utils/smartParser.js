@@ -34,11 +34,17 @@ class SmartParser {
     return this.parseTimeExpression(text);
   }
 
+  // 新增：兼容方法名，作为 parseReminderText 的别名
+  parse(text) {
+    return this.parseReminderText(text);
+  }
+
   // 智能解析提醒文本
   parseReminderText(text) {
     const result = {
       originalText: text,
       message: text,
+      time: null,
       priority: 'normal',
       category: null,
       tags: [],
@@ -61,6 +67,9 @@ class SmartParser {
     
     // 提取备注
     result.notes = this.extractNotes(text);
+    
+    // 提取时间
+    result.time = this.parseTimeExpression(text);
     
     // 清理消息内容（移除时间表达等）
     result.message = this.cleanMessage(text);
@@ -165,7 +174,7 @@ class SmartParser {
     // 先移除时间表达
     cleaned = this.stripTimeExpressions(cleaned);
 
-    // 移除常见冗余提示词
+    // 移除常见冗余提示词，但保留一些有用的动词
     const fillerWords = ['提醒我', '提醒', '记得', '帮我', '请', '一下', '麻烦'];
     for (const w of fillerWords) {
       const regex = new RegExp(w, 'g');
@@ -198,6 +207,24 @@ class SmartParser {
     
     // 清理多余空格与标点
     cleaned = cleaned.replace(/[，,。.!？?]+/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 如果清理后内容太短，尝试保留更多原始信息
+    if (cleaned.length < 3) {
+      // 重新清理，但保留更多内容
+      cleaned = text;
+      // 只移除时间表达和标签
+      cleaned = cleaned.replace(this.tagRegex, '');
+      cleaned = this.stripTimeExpressions(cleaned);
+      // 移除备注
+      for (const separator of noteSeparators) {
+        const index = cleaned.indexOf(separator);
+        if (index !== -1) {
+          cleaned = cleaned.substring(0, index).trim();
+          break;
+        }
+      }
+      cleaned = cleaned.replace(/[，,。.!？?]+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
     
     return cleaned;
   }
@@ -265,44 +292,61 @@ class SmartParser {
   // 从匹配结果解析时间
   parseTimeFromMatch(match, type) {
     const now = new Date();
-    let targetTime = new Date(now);
+    let targetTime = new Date();
     
     if (type === 'tonight') {
       const hour = parseInt(match[1]);
-      if (hour < 18) {
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
         targetTime.setDate(targetTime.getDate() + 1);
       }
-      targetTime.setHours(hour, 0, 0, 0);
     } else if (type === 'tomorrow') {
-      targetTime.setDate(targetTime.getDate() + 1);
-      const hour = parseInt(match[2] || match[1]);
+      const timeOfDay = match[1]; // '上午', '下午', '晚上' 或 undefined
+      const hour = parseInt(match[2]);
       let adjustedHour = hour;
       
-      if (match[1] === '下午' && hour < 12) adjustedHour += 12;
-      if (match[1] === '晚上' && hour < 12) adjustedHour += 12;
-      
-      if (match.length > 2) {
-        const minute = parseInt(match[3]);
-        targetTime.setHours(adjustedHour, minute, 0, 0);
-      } else {
-        targetTime.setHours(adjustedHour, 0, 0, 0);
+      // 根据时间段调整小时
+      if (timeOfDay === '下午' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '晚上' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '上午' && hour === 12) {
+        adjustedHour = 0; // 上午12点是0点
       }
+      
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(adjustedHour, 0, 0, 0);
+      
     } else if (type === 'today') {
-      const hour = parseInt(match[2] || match[1]);
+      const timeOfDay = match[1]; // '上午', '下午', '晚上' 或 undefined
+      const hour = parseInt(match[2]);
       let adjustedHour = hour;
       
-      if (match[1] === '下午' && hour < 12) adjustedHour += 12;
-      if (match[1] === '晚上' && hour < 12) adjustedHour += 12;
-      
-      if (match.length > 2) {
-        const minute = parseInt(match[3]);
-        targetTime.setHours(adjustedHour, minute, 0, 0);
-      } else {
-        targetTime.setHours(adjustedHour, 0, 0, 0);
+      // 根据时间段调整小时
+      if (timeOfDay === '下午' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '晚上' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '上午' && hour === 12) {
+        adjustedHour = 0; // 上午12点是0点
       }
+      
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(adjustedHour, 0, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
     } else if (type === 'time') {
       const hour = parseInt(match[1]);
       const minute = parseInt(match[2]);
+      
+      targetTime.setDate(now.getDate());
       targetTime.setHours(hour, minute, 0, 0);
       
       // 如果时间已过，设置为明天

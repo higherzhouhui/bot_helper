@@ -458,7 +458,7 @@ class TelegramReminderBot {
   // 初始化提醒定时器
   async initReminderTimer() {
     try {
-      // 每分钟检查一次提醒
+      // 每间隔配置的毫秒检查一次提醒（config 已是毫秒）
       setInterval(async () => {
         try {
           const dueReminders = await reminderService.getDueReminders();
@@ -468,7 +468,7 @@ class TelegramReminderBot {
         } catch (error) {
           console.error('检查提醒失败:', error);
         }
-      }, config.REMINDER_CHECK_INTERVAL * 1000);
+      }, config.REMINDER_CHECK_INTERVAL);
 
       console.log('⏰ 提醒定时器已启动');
     } catch (error) {
@@ -527,6 +527,17 @@ class TelegramReminderBot {
     ];
     let newsIdx = 0;
 
+    // 立即执行一次
+    (async () => {
+      try {
+        for (const t of newsTasks.slice(0, 2)) {
+          await newsService.crawlNews(t.source, t.cat, 10);
+        }
+      } catch (e) {
+        console.warn('首次新闻抓取失败:', e.message || e);
+      }
+    })();
+
     setInterval(async () => {
       try {
         const t = newsTasks[newsIdx % newsTasks.length];
@@ -535,11 +546,23 @@ class TelegramReminderBot {
       } catch (error) {
         console.error('新闻爬取任务失败:', error.message || error);
       }
-    }, config.NEWS_CRAWL_INTERVAL * 1000);
+    }, config.NEWS_CRAWL_INTERVAL);
 
     // Web3 轮询
     const web3Tasks = ['chainfeeds', 'panews', 'investing_cn'];
     let widx = 0;
+
+    // 立即执行一次
+    (async () => {
+      try {
+        for (const src of web3Tasks) {
+          await newsService.crawlWeb3(src, 8);
+        }
+      } catch (e) {
+        console.warn('首次 Web3 抓取失败:', e.message || e);
+      }
+    })();
+
     setInterval(async () => {
       try {
         const src = web3Tasks[widx % web3Tasks.length];
@@ -548,9 +571,9 @@ class TelegramReminderBot {
       } catch (error) {
         console.error('Web3 爬取任务失败:', error.message || error);
       }
-    }, Math.max(60, Math.floor(config.NEWS_CRAWL_INTERVAL / 2)) * 1000);
+    }, Math.max(60000, Math.floor(config.NEWS_CRAWL_INTERVAL / 2)));
 
-    // 个性化简报：每分钟检查一次，匹配 HH:mm
+    // 个性化简报：每分钟检查一次，匹配 HH:mm（维持 60s 间隔）
     setInterval(async () => {
       try {
         const now = new Date();
@@ -559,10 +582,7 @@ class TelegramReminderBot {
         const userIds = await userService.getUsersToBriefAt(hhmm);
         for (const uid of userIds) {
           const inQuiet = await userService.isInQuietHours(uid, now);
-          if (inQuiet) {
-            // 简化实现：静默时段内先跳过发送（可扩展为摘要队列）
-            continue;
-          }
+          if (inQuiet) continue;
           const brief = await newsService.getPersonalizedBrief(uid, 8);
           await this.bot.sendMessage(uid, brief, { parse_mode: 'HTML', disable_web_page_preview: true });
         }

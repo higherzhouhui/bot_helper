@@ -1,4 +1,4 @@
-const { sequelize, User, Category, Reminder, ReminderHistory, ReminderTemplate, NewsCategory, News, UserNewsPreference, NewsReadHistory, WorkPost, testConnection } = require('./models');
+const { sequelize, User, Category, Reminder, ReminderHistory, ReminderTemplate, NewsCategory, News, UserNewsPreference, NewsReadHistory, testConnection } = require('./models');
 const newsService = require('./services/newsService');
 
 console.log('正在初始化数据库...');
@@ -51,9 +51,14 @@ async function initializeDatabase() {
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_news_read_history_news_id ON news_read_history(news_id)');
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_news_read_history_read_at ON news_read_history(read_at)');
 
-      // 工作板块索引
-      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_work_posts_source ON work_posts(source)');
-      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_work_posts_created_at ON work_posts(created_at)');
+      // 新增：用户设置、关键词订阅、收藏、埋点索引
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_keyword_subscriptions_user_id ON keyword_subscriptions(user_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_favorite_news_user_id ON favorite_news(user_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_favorite_news_news_id ON favorite_news(news_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_analytics_events_user_id ON analytics_events(user_id)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_analytics_events_event_type ON analytics_events(event_type)');
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_analytics_events_occurred_at ON analytics_events(occurred_at)');
       
       console.log('✅ 数据库索引创建成功');
     } catch (indexError) {
@@ -86,14 +91,17 @@ async function initializeDatabase() {
     console.log('   - news (新闻表)');
     console.log('   - user_news_preferences (用户新闻偏好表)');
     console.log('   - news_read_history (新闻阅读历史表)');
-    console.log('   - work_posts (工作帖子表)');
+    console.log('   - user_settings (用户设置表)');
+    console.log('   - keyword_subscriptions (关键词订阅表)');
+    console.log('   - favorite_news (新闻收藏表)');
+    console.log('   - analytics_events (埋点事件表)');
 
   } catch (error) {
     console.error('❌ 数据库初始化失败:', error);
     process.exit(1);
   } finally {
     await sequelize.close();
-    console.log('🔒 数据库连接已关闭');
+    console.log('�� 数据库连接已关闭');
   }
 }
 

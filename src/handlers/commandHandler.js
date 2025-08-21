@@ -151,7 +151,6 @@ class CommandHandler {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const text = msg.text;
-    
     try {
       // 检查是否是新闻查询
       if (this.isNewsQuery(text)) {
@@ -167,7 +166,8 @@ class CommandHandler {
       // 创建提醒
       const reminderData = {
         userId,
-        message: parsed.content,
+        chatId,
+        message: parsed.message,
         reminderTime: parsed.time,
         categoryId: parsed.categoryId,
         priority: parsed.priority,
