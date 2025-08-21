@@ -557,6 +557,189 @@ class ReminderService {
     }
   }
 
+  // 管理员方法：获取总用户数
+  async getUserCount() {
+    try {
+      return await User.count();
+    } catch (error) {
+      console.error('获取用户总数失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取总提醒数
+  async getTotalReminderCount() {
+    try {
+      return await Reminder.count();
+    } catch (error) {
+      console.error('获取总提醒数失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取总分类数
+  async getTotalCategoryCount() {
+    try {
+      return await Category.count();
+    } catch (error) {
+      console.error('获取总分类数失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取所有用户及其统计信息
+  async getAllUsersWithStats(page = 1, limit = 10) {
+    try {
+      const offset = (page - 1) * limit;
+      const users = await User.findAll({
+        include: [
+          {
+            model: Reminder,
+            as: 'reminders',
+            attributes: ['id', 'message', 'status', 'reminderTime'],
+            order: [['createdAt', 'DESC']],
+            limit: 5
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset
+      });
+
+      return users.map(user => {
+        const userData = user.toJSON();
+        return {
+          ...userData,
+          reminderCount: userData.reminders ? userData.reminders.length : 0,
+          recentReminders: userData.reminders || []
+        };
+      });
+    } catch (error) {
+      console.error('获取所有用户统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取活跃用户数（7天内有活动的用户）
+  async getActiveUserCount() {
+    try {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const activeUsers = await User.count({
+        include: [
+          {
+            model: Reminder,
+            as: 'reminders',
+            where: {
+              createdAt: { [Sequelize.Op.gte]: sevenDaysAgo }
+            },
+            required: false
+          }
+        ],
+        distinct: true
+      });
+      return activeUsers;
+    } catch (error) {
+      console.error('获取活跃用户数失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取今日提醒数
+  async getTodayReminderCount() {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      return await Reminder.count({
+        where: {
+          createdAt: {
+            [Sequelize.Op.gte]: today,
+            [Sequelize.Op.lt]: tomorrow
+          }
+        }
+      });
+    } catch (error) {
+      console.error('获取今日提醒数失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取提醒状态分布统计
+  async getReminderStatusStats() {
+    try {
+      const stats = await Reminder.findAll({
+        attributes: [
+          'status',
+          [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+        ],
+        group: ['status'],
+        raw: true
+      });
+      
+      return stats.map(stat => ({
+        status: stat.status,
+        count: parseInt(stat.count, 10)
+      }));
+    } catch (error) {
+      console.error('获取提醒状态统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取分类分布统计
+  async getCategoryDistributionStats() {
+    try {
+      const stats = await Reminder.findAll({
+        include: [
+          {
+            model: Category,
+            as: 'category',
+            attributes: ['name']
+          }
+        ],
+        attributes: [
+          'categoryId',
+          [Sequelize.fn('COUNT', Sequelize.col('Reminder.id')), 'count']
+        ],
+        group: ['categoryId'],
+        raw: true
+      });
+      
+      return stats.map(stat => ({
+        categoryId: stat.categoryId,
+        categoryName: stat['category.name'] || '未分类',
+        count: parseInt(stat.count, 10)
+      }));
+    } catch (error) {
+      console.error('获取分类分布统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 管理员方法：获取优先级分布统计
+  async getPriorityDistributionStats() {
+    try {
+      const stats = await Reminder.findAll({
+        attributes: [
+          'priority',
+          [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+        ],
+        group: ['priority'],
+        raw: true
+      });
+      
+      return stats.map(stat => ({
+        priority: stat.priority,
+        count: parseInt(stat.count, 10)
+      }));
+    } catch (error) {
+      console.error('获取优先级分布统计失败:', error);
+      throw error;
+    }
+  }
+
   // 搜索提醒
   async searchReminders(userId, query) {
     try {

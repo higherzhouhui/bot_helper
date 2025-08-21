@@ -276,14 +276,160 @@ class CommandHandler {
   async handleQuietCommand(msg) {
     const chatId = msg.chat.id;
     const parts = (msg.text || '').split(' ').filter(Boolean);
+    
     if (parts.length === 3) {
-      await userService.setQuietHours(chatId, parts[1], parts[2]);
-      await this.bot.sendMessage(chatId, `🔕 已设置安静时段：${parts[1]} - ${parts[2]}`);
-    } else if (parts.length === 2 && parts[1] === 'off') {
+      const [start, end] = parts.slice(1);
+      await userService.setQuietHours(chatId, start, end);
+      await this.bot.sendMessage(chatId, `✅ 已设置安静时段：${start} - ${end}`);
+    } else if (parts.length === 2 && parts[1] === 'clear') {
       await userService.clearQuietHours(chatId);
-      await this.bot.sendMessage(chatId, '🔔 已关闭安静时段');
+      await this.bot.sendMessage(chatId, '✅ 已清除安静时段设置');
     } else {
-      await this.bot.sendMessage(chatId, '用法：/quiet 22:30 08:00 或 /quiet off');
+      await this.bot.sendMessage(chatId, '🔇 设置安静时段：/quiet HH:MM HH:MM\n清除设置：/quiet clear');
+    }
+  }
+
+  // 管理员命令：查询用户统计信息
+  async handleAdminStatsCommand(msg) {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    // 检查是否是管理员
+    if (!this.config.ADMIN_USER_IDS.includes(userId)) {
+      await this.bot.sendMessage(chatId, '❌ 权限不足，此命令仅限管理员使用');
+      return;
+    }
+    
+    try {
+      const stats = await this.getAdminStats();
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+            { text: '📊 详细统计', callback_data: 'admin_detailed_stats' }
+          ],
+          [
+            { text: '⏰ 提醒统计', callback_data: 'admin_reminder_stats' },
+            { text: '📰 新闻统计', callback_data: 'admin_news_stats' }
+          ]
+        ]
+      };
+      
+      await this.bot.sendMessage(chatId, stats, { 
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+      });
+    } catch (error) {
+      console.error('获取管理员统计失败:', error);
+      await this.bot.sendMessage(chatId, '❌ 获取统计信息失败');
+    }
+  }
+
+  // 管理员命令：查询用户详细信息
+  async handleAdminUsersCommand(msg) {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    // 检查是否是管理员
+    if (!this.config.ADMIN_USER_IDS.includes(userId)) {
+      await this.bot.sendMessage(chatId, '❌ 权限不足，此命令仅限管理员使用');
+      return;
+    }
+    
+    try {
+      const userDetails = await this.getAdminUserDetails(1, 5); // 第一页，每页5个用户
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+            { text: '📊 系统统计', callback_data: 'admin_stats' }
+          ]
+        ]
+      };
+      
+      await this.bot.sendMessage(chatId, userDetails, { 
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+      });
+    } catch (error) {
+      console.error('获取用户详情失败:', error);
+      await this.bot.sendMessage(chatId, '❌ 获取用户详情失败');
+    }
+  }
+
+  // 获取管理员统计信息
+  async getAdminStats() {
+    try {
+      const [totalUsers, totalReminders, totalNews, totalCategories, activeUsers, todayReminders] = await Promise.all([
+        require('../services/reminderService').getUserCount(),
+        require('../services/reminderService').getTotalReminderCount(),
+        require('../services/newsService').getNewsStats(),
+        require('../services/reminderService').getTotalCategoryCount(),
+        require('../services/reminderService').getActiveUserCount(),
+        require('../services/reminderService').getTodayReminderCount()
+      ]);
+
+      let message = '📊 <b>系统统计信息</b>\n\n';
+      message += `👥 <b>用户统计</b>\n`;
+      message += `   • 总用户数：${totalUsers}\n`;
+      message += `   • 活跃用户：${activeUsers}\n\n`;
+      message += `⏰ <b>提醒统计</b>\n`;
+      message += `   • 总提醒数：${totalReminders}\n`;
+      message += `   • 今日提醒：${todayReminders}\n\n`;
+      message += `📰 <b>内容统计</b>\n`;
+      message += `   • 总新闻数：${totalNews.totalNews}\n`;
+      message += `   • 总分类数：${totalCategories}\n`;
+      message += `   • 热门新闻：${totalNews.hotNewsCount}\n`;
+      message += `   • 置顶新闻：${totalNews.topNewsCount}\n\n`;
+      message += `📅 <b>统计时间</b>：${new Date().toLocaleString('zh-CN')}`;
+      
+      return message;
+    } catch (error) {
+      console.error('获取管理员统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取用户详细信息（支持分页）
+  async getAdminUserDetails(page = 1, limit = 5) {
+    try {
+      const users = await require('../services/reminderService').getAllUsersWithStats(page, limit);
+      const totalUsers = await require('../services/reminderService').getUserCount();
+      const totalPages = Math.ceil(totalUsers / limit);
+      
+      let message = `👥 <b>用户详细信息</b> (第 ${page}/${totalPages} 页)\n\n`;
+      
+      if (users.length === 0) {
+        message += '暂无用户数据';
+        return message;
+      }
+      
+      for (const user of users) {
+        message += `🆔 <b>用户ID：</b>${user.id}\n`;
+        message += `👤 <b>用户名：</b>${user.username || '未设置'}\n`;
+        message += `📝 <b>姓名：</b>${user.firstName || ''} ${user.lastName || ''}\n`;
+        message += `⏰ <b>提醒数量：</b>${user.reminderCount || 0}\n`;
+        message += `📅 <b>注册时间：</b>${new Date(user.createdAt).toLocaleString('zh-CN')}\n`;
+        
+        if (user.recentReminders && user.recentReminders.length > 0) {
+          message += `📋 <b>最近提醒：</b>\n`;
+          user.recentReminders.slice(0, 3).forEach((reminder, index) => {
+            const status = reminder.status === 'pending' ? '⏳' : 
+                          reminder.status === 'completed' ? '✅' : 
+                          reminder.status === 'delayed' ? '⏰' : '🔔';
+            message += `   ${index + 1}. ${status} ${reminder.message}\n`;
+          });
+        }
+        
+        message += '\n' + '─'.repeat(30) + '\n\n';
+      }
+      
+      message += `📄 <b>分页信息</b>：共 ${totalUsers} 个用户，每页 ${limit} 个`;
+      
+      return message;
+    } catch (error) {
+      console.error('获取用户详情失败:', error);
+      throw error;
     }
   }
 
@@ -422,6 +568,278 @@ class CommandHandler {
     } catch (error) {
       console.error('清理已完成提醒失败:', error);
       await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 清理失败');
+    }
+  }
+
+  // 处理管理员回调查询
+  async handleAdminCallback(callbackQuery) {
+    const data = callbackQuery.data;
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    
+    // 检查是否是管理员
+    if (!this.config.ADMIN_USER_IDS.includes(userId)) {
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 权限不足');
+      return;
+    }
+    
+    try {
+      if (data.startsWith('admin_users_page_')) {
+        const page = parseInt(data.split('_')[3]);
+        const userDetails = await this.getAdminUserDetails(page, 5);
+        
+        const totalUsers = await require('../services/reminderService').getUserCount();
+        const totalPages = Math.ceil(totalUsers / 5);
+        
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '◀️ 上一页', callback_data: `admin_users_page_${Math.max(1, page - 1)}` },
+              { text: `${page}/${totalPages}`, callback_data: 'admin_page_info' },
+              { text: '下一页 ▶️', callback_data: `admin_users_page_${Math.min(totalPages, page + 1)}` }
+            ],
+            [
+              { text: '📊 系统统计', callback_data: 'admin_stats' },
+              { text: '🔙 返回', callback_data: 'admin_back' }
+            ]
+          ]
+        };
+        
+        // 禁用无效的翻页按钮
+        if (page <= 1) {
+          keyboard.inline_keyboard[0][0].text = '◀️ 上一页';
+          keyboard.inline_keyboard[0][0].callback_data = 'admin_users_page_1';
+        }
+        if (page >= totalPages) {
+          keyboard.inline_keyboard[0][2].text = '下一页 ▶️';
+          keyboard.inline_keyboard[0][2].callback_data = `admin_users_page_${totalPages}`;
+        }
+        
+        await this.bot.editMessageText(userDetails, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+        
+      } else if (data === 'admin_detailed_stats') {
+        const detailedStats = await this.getDetailedAdminStats();
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+              { text: '📊 基础统计', callback_data: 'admin_stats' }
+            ]
+          ]
+        };
+        
+        await this.bot.editMessageText(detailedStats, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+        
+      } else if (data === 'admin_reminder_stats') {
+        const reminderStats = await this.getReminderAdminStats();
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+              { text: '📊 系统统计', callback_data: 'admin_stats' }
+            ]
+          ]
+        };
+        
+        await this.bot.editMessageText(reminderStats, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+        
+      } else if (data === 'admin_news_stats') {
+        const newsStats = await this.getNewsAdminStats();
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+              { text: '📊 系统统计', callback_data: 'admin_stats' }
+            ]
+          ]
+        };
+        
+        await this.bot.editMessageText(newsStats, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+        
+      } else if (data === 'admin_stats') {
+        const stats = await this.getAdminStats();
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '👥 查看用户列表', callback_data: 'admin_users_page_1' },
+              { text: '📊 详细统计', callback_data: 'admin_detailed_stats' }
+            ],
+            [
+              { text: '⏰ 提醒统计', callback_data: 'admin_reminder_stats' },
+              { text: '📰 新闻统计', callback_data: 'admin_news_stats' }
+            ]
+          ]
+        };
+        
+        await this.bot.editMessageText(stats, {
+          chat_id: chatId,
+          message_id: callbackQuery.message.message_id,
+          parse_mode: 'HTML',
+          reply_markup: keyboard
+        });
+      }
+      
+      await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 操作成功');
+      
+    } catch (error) {
+      console.error('处理管理员回调失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+    }
+  }
+
+  // 获取详细统计信息
+  async getDetailedAdminStats() {
+    try {
+      const [totalUsers, totalReminders, totalNews, totalCategories, activeUsers, todayReminders, 
+            reminderStats, categoryStats, priorityStats] = await Promise.all([
+        require('../services/reminderService').getUserCount(),
+        require('../services/reminderService').getTotalReminderCount(),
+        require('../services/newsService').getNewsStats(),
+        require('../services/reminderService').getTotalCategoryCount(),
+        require('../services/reminderService').getActiveUserCount(),
+        require('../services/reminderService').getTodayReminderCount(),
+        require('../services/reminderService').getReminderStatusStats(),
+        require('../services/reminderService').getCategoryDistributionStats(),
+        require('../services/reminderService').getPriorityDistributionStats()
+      ]);
+
+      let message = '📊 <b>详细统计信息</b>\n\n';
+      
+      message += `👥 <b>用户分析</b>\n`;
+      message += `   • 总用户数：${totalUsers}\n`;
+      message += `   • 活跃用户：${activeUsers}\n`;
+      message += `   • 用户活跃率：${((activeUsers / totalUsers) * 100).toFixed(1)}%\n\n`;
+      
+      message += `⏰ <b>提醒分析</b>\n`;
+      message += `   • 总提醒数：${totalReminders}\n`;
+      message += `   • 今日提醒：${todayReminders}\n`;
+      message += `   • 平均每用户：${(totalReminders / totalUsers).toFixed(1)} 个\n\n`;
+      
+      message += `📰 <b>内容分析</b>\n`;
+      message += `   • 总新闻数：${totalNews.totalNews}\n`;
+      message += `   • 总分类数：${totalCategories}\n`;
+      message += `   • 热门新闻：${totalNews.hotNewsCount}\n`;
+      message += `   • 置顶新闻：${totalNews.topNewsCount}\n\n`;
+      
+      message += `📅 <b>统计时间</b>：${new Date().toLocaleString('zh-CN')}`;
+      
+      return message;
+    } catch (error) {
+      console.error('获取详细统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取提醒统计信息
+  async getReminderAdminStats() {
+    try {
+      const [totalReminders, statusStats, categoryStats, priorityStats, todayReminders] = await Promise.all([
+        require('../services/reminderService').getTotalReminderCount(),
+        require('../services/reminderService').getReminderStatusStats(),
+        require('../services/reminderService').getCategoryDistributionStats(),
+        require('../services/reminderService').getPriorityDistributionStats(),
+        require('../services/reminderService').getTodayReminderCount()
+      ]);
+
+      let message = '⏰ <b>提醒统计信息</b>\n\n';
+      
+      message += `📊 <b>总体统计</b>\n`;
+      message += `   • 总提醒数：${totalReminders}\n`;
+      message += `   • 今日提醒：${todayReminders}\n\n`;
+      
+      if (statusStats && statusStats.length > 0) {
+        message += `📈 <b>状态分布</b>\n`;
+        statusStats.forEach(stat => {
+          const emoji = stat.status === 'pending' ? '⏳' : 
+                       stat.status === 'completed' ? '✅' : 
+                       stat.status === 'delayed' ? '⏰' : '🔔';
+          message += `   ${emoji} ${stat.status}：${stat.count} 个\n`;
+        });
+        message += '\n';
+      }
+      
+      if (categoryStats && categoryStats.length > 0) {
+        message += `🏷️ <b>分类分布</b>\n`;
+        categoryStats.slice(0, 5).forEach(stat => {
+          message += `   • ${stat.categoryName || '未分类'}：${stat.count} 个\n`;
+        });
+        message += '\n';
+      }
+      
+      if (priorityStats && priorityStats.length > 0) {
+        message += `⭐ <b>优先级分布</b>\n`;
+        priorityStats.forEach(stat => {
+          const emoji = stat.priority === 'urgent' ? '🔴' : 
+                       stat.priority === 'high' ? '🟡' : 
+                       stat.priority === 'normal' ? '🟢' : '🔵';
+          message += `   ${emoji} ${stat.priority}：${stat.count} 个\n`;
+        });
+        message += '\n';
+      }
+      
+      message += `📅 <b>统计时间</b>：${new Date().toLocaleString('zh-CN')}`;
+      
+      return message;
+    } catch (error) {
+      console.error('获取提醒统计失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取新闻统计信息
+  async getNewsAdminStats() {
+    try {
+      const newsStats = await require('../services/newsService').getNewsStats();
+      const [totalNews, totalCategories, hotNewsCount, topNewsCount, categoryStats] = [
+        newsStats.totalNews,
+        newsStats.totalCategories,
+        newsStats.hotNewsCount,
+        newsStats.topNewsCount,
+        newsStats.categoryStats
+      ];
+
+      let message = '📰 <b>新闻统计信息</b>\n\n';
+      
+      message += `📊 <b>总体统计</b>\n`;
+      message += `   • 总新闻数：${totalNews}\n`;
+      message += `   • 总分类数：${totalCategories}\n`;
+      message += `   • 热门新闻：${hotNewsCount}\n`;
+      message += `   • 置顶新闻：${topNewsCount}\n\n`;
+      
+      if (categoryStats && categoryStats.length > 0) {
+        message += `🏷️ <b>分类分布</b>\n`;
+        categoryStats.slice(0, 8).forEach(stat => {
+          message += `   • ${stat.category?.displayName || stat.category?.name || '未知'}：${stat.count} 条\n`;
+        });
+        message += '\n';
+      }
+      
+      message += `📅 <b>统计时间</b>：${new Date().toLocaleString('zh-CN')}`;
+      
+      return message;
+    } catch (error) {
+      console.error('获取新闻统计失败:', error);
+      throw error;
     }
   }
 }

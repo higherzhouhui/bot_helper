@@ -129,6 +129,24 @@ class TelegramReminderBot {
       }
     });
 
+    // 管理员命令：/admin_stats - 系统统计
+    this.bot.onText(/\/admin_stats/, async (msg) => {
+      try {
+        await this.commandHandler.handleAdminStatsCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'admin_stats_command');
+      }
+    });
+
+    // 管理员命令：/admin_users - 用户详情
+    this.bot.onText(/\/admin_users/, async (msg) => {
+      try {
+        await this.commandHandler.handleAdminUsersCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'admin_users_command');
+      }
+    });
+
     // 处理 /stats 命令
     this.bot.onText(/\/stats/, async (msg) => {
       try {
@@ -315,6 +333,8 @@ class TelegramReminderBot {
                  data === 'help' || data === 'stats' || data.startsWith('back_to_') ||
                  data === 'reminder_stats' || data === 'search_reminders' || data === 'cleanup_completed') {
         await this.commandHandler.handleCommandCallback(callbackQuery);
+      } else if (data.startsWith('admin_')) {
+        await this.commandHandler.handleAdminCallback(callbackQuery);
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 未知操作');
       }

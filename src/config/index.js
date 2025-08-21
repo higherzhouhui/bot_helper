@@ -27,6 +27,9 @@ const config = {
   BOT_TOKEN: process.env.BOT_TOKEN,
   TIMEZONE: process.env.TIMEZONE || 'Asia/Shanghai',
   
+  // 管理员配置
+  ADMIN_USER_IDS: (process.env.ADMIN_USER_IDS || '').split(',').filter(Boolean).map(id => parseInt(id.trim())),
+  
   // 数据库配置
   DB_PATH: process.env.DB_PATH || './data/database.sqlite',
   DB_DIALECT: process.env.DB_DIALECT || 'sqlite',
