@@ -8,7 +8,15 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         TZ: 'Asia/Shanghai',
-        DB_PATH: process.env.DB_PATH || './reminders.db',
+        DB_PATH: process.env.DB_PATH || './data/production_database.sqlite',
+        BOT_TOKEN: process.env.BOT_TOKEN,
+        TIMEZONE: process.env.TIMEZONE || 'Asia/Shanghai'
+      },
+      // 开发环境配置
+      env_development: {
+        NODE_ENV: 'development',
+        TZ: 'Asia/Shanghai',
+        DB_PATH: process.env.DB_PATH || './data/dev_database.sqlite',
         BOT_TOKEN: process.env.BOT_TOKEN,
         TIMEZONE: process.env.TIMEZONE || 'Asia/Shanghai'
       },

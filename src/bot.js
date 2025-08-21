@@ -1,15 +1,14 @@
-require('dotenv').config();
+const { config, validateConfig } = require('./config');
 const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
-const { testConnection } = require('./models');
 const reminderService = require('./services/reminderService');
 const newsService = require('./services/newsService');
 const workService = require('./services/workService');
 const SmartParser = require('./utils/smartParser');
 
 // 配置
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const TIMEZONE = process.env.TIMEZONE || 'Asia/Shanghai';
+const BOT_TOKEN = config.BOT_TOKEN;
+const TIMEZONE = config.TIMEZONE;
 const REMINDER_CONFIG = {
   initialWait: 5 * 60 * 1000, // 首次等待5分钟
   repeatInterval: 10 * 60 * 1000, // 重复间隔10分钟
@@ -22,15 +21,22 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 // 存储提醒定时器
 const reminderTimers = new Map();
 
+// 存储用户编辑状态
+const userEditStates = new Map();
+
 // 智能解析器
 const smartParser = new SmartParser();
 
 // 启动机器人
 async function startBot() {
   try {
+    // 验证配置
+    validateConfig();
+    
     console.log('机器人启动成功！时区:', TIMEZONE);
     console.log('权限设置: 所有关注机器人的用户都可以使用');
     console.log('提醒配置: 首次等待5分钟, 重复间隔10分钟, 最大重复5次');
+    console.log('当前环境:', config.NODE_ENV);
     
     // 初始化提醒定时器
     await initializeReminders();
@@ -115,10 +121,17 @@ async function createReminder(msg, text) {
       response += `\n\n💡 智能建议：\n${suggestions.join('\n')}`;
     }
     
-    return response;
+    // 返回包含按钮的响应对象
+    return {
+      text: response,
+      keyboard: createReminderCreatedButtons(reminder.id)
+    };
   } catch (error) {
     console.error('创建提醒失败:', error);
-    return '❌ 创建提醒失败，请重试';
+    return {
+      text: '❌ 创建提醒失败，请重试',
+      keyboard: undefined
+    };
   }
 }
 
@@ -131,13 +144,14 @@ async function sendReminder(reminder) {
     // 添加分类和优先级信息
     let fullMessage = message;
     if (reminder.category) {
-      fullMessage += `\n📂 分类：${reminder.category.displayName}`;
+      fullMessage += `\n📂 分类：${reminder.category.name}`;
     }
     if (reminder.priority && reminder.priority !== 'normal') {
       const priorityText = {
-        'low': '🟢 低优先级',
+        'urgent': '🚨 紧急',
         'high': '🔴 高优先级',
-        'urgent': '🚨 紧急'
+        'normal': '🟢 普通',
+        'low': '🔵 低优先级'
       }[reminder.priority] || '';
       if (priorityText) {
         fullMessage += `\n${priorityText}`;
@@ -171,6 +185,18 @@ async function sendReminder(reminder) {
   }
 }
 
+// 创建提醒创建成功后的按钮
+function createReminderCreatedButtons(reminderId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✏️ 修改提醒', callback_data: `edit_${reminderId}` },
+        { text: '🗑️ 取消提醒', callback_data: `delete_${reminderId}` }
+      ]
+    ]
+  };
+}
+
 // 创建操作按钮
 function createActionButtons(reminderId) {
   return {
@@ -180,7 +206,10 @@ function createActionButtons(reminderId) {
         { text: '⏰ 延后10分钟', callback_data: `delay_${reminderId}` }
       ],
       [
-        { text: '😴 小睡30分钟', callback_data: `snooze_${reminderId}` },
+        { text: '✏️ 修改', callback_data: `edit_${reminderId}` },
+        { text: '😴 小睡30分钟', callback_data: `snooze_${reminderId}` }
+      ],
+      [
         { text: '🗑️ 删除', callback_data: `delete_${reminderId}` }
       ]
     ]
@@ -322,13 +351,7 @@ bot.on('callback_query', async (callbackQuery) => {
     if (data.startsWith('complete_')) {
       const reminderId = parseInt(data.split('_')[1]);
       if (await completeReminder(reminderId)) {
-        await bot.editMessageText(
-          `✅ 提醒已完成！\n\n💬 ${callbackQuery.message.text.split('\n\n')[1]}`,
-          {
-            chat_id: chatId,
-            message_id: callbackQuery.message.message_id
-          }
-        );
+        await bot.sendMessage(chatId, `✅ 提醒已完成！\n\n💬 ${callbackQuery.message.text.split('\n\n')[1]}`);
         await bot.answerCallbackQuery(callbackQuery.id, '✅ 提醒已完成');
       } else {
         await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
@@ -345,14 +368,9 @@ bot.on('callback_query', async (callbackQuery) => {
           minute: '2-digit'
         });
         
-        await bot.editMessageText(
-          `⏰ 提醒已延后10分钟！\n\n📅 新时间：${newTimeStr}\n💬 ${delayedReminder.message}`,
-          {
-            chat_id: chatId,
-            message_id: callbackQuery.message.message_id,
-            reply_markup: createActionButtons(reminderId)
-          }
-        );
+        await bot.sendMessage(chatId, `⏰ 提醒已延后10分钟！\n\n📅 新时间：${newTimeStr}\n💬 ${delayedReminder.message}`, {
+          reply_markup: createActionButtons(reminderId)
+        });
         await bot.answerCallbackQuery(callbackQuery.id, '⏰ 提醒已延后10分钟');
       } else {
         await bot.answerCallbackQuery(callbackQuery.id, '❌ 延后失败');
@@ -369,28 +387,26 @@ bot.on('callback_query', async (callbackQuery) => {
           minute: '2-digit'
         });
         
-        await bot.editMessageText(
-          `😴 提醒已小睡30分钟！\n\n📅 小睡到：${snoozeTimeStr}\n💬 ${snoozedReminder.message}`,
-          {
-            chat_id: chatId,
-            message_id: callbackQuery.message.message_id,
-            reply_markup: createActionButtons(reminderId)
-          }
-        );
+        await bot.sendMessage(chatId, `😴 提醒已小睡30分钟！\n\n📅 小睡到：${snoozeTimeStr}\n💬 ${snoozedReminder.message}`, {
+          reply_markup: createActionButtons(reminderId)
+        });
         await bot.answerCallbackQuery(callbackQuery.id, '😴 提醒已小睡30分钟');
       } else {
         await bot.answerCallbackQuery(callbackQuery.id, '❌ 小睡失败');
       }
+    } else if (data.startsWith('edit_content_') || data.startsWith('edit_time_') || 
+               data.startsWith('edit_category_') || data.startsWith('edit_priority_') ||
+               data.startsWith('back_to_reminder_') || data.startsWith('set_category_') ||
+               data.startsWith('set_priority_') || data.startsWith('back_to_edit_')) {
+      // 处理编辑相关按钮
+      await handleEditOptions(callbackQuery, data);
+    } else if (data.startsWith('edit_')) {
+      const reminderId = parseInt(data.split('_')[1]) || parseInt(data.split('_')[2]);
+      await handleEditReminder(callbackQuery, reminderId);
     } else if (data.startsWith('delete_')) {
       const reminderId = parseInt(data.split('_')[1]);
       if (await deleteReminder(userId, reminderId)) {
-        await bot.editMessageText(
-          `🗑️ 提醒已删除！\n\n💬 ${callbackQuery.message.text.split('\n\n')[1]}`,
-          {
-            chat_id: chatId,
-            message_id: callbackQuery.message.message_id
-          }
-        );
+        await bot.sendMessage(chatId, `🗑️ 提醒已删除！\n\n💬 ${callbackQuery.message.text.split('\n\n')[1]}`);
         await bot.answerCallbackQuery(callbackQuery.id, '🗑️ 提醒已删除');
       } else {
         await bot.answerCallbackQuery(callbackQuery.id, '❌ 删除失败');
@@ -404,6 +420,511 @@ bot.on('callback_query', async (callbackQuery) => {
     await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败，请重试');
   }
 });
+
+// 处理修改提醒
+async function handleEditReminder(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    // 获取提醒信息
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+    // 创建编辑选项按钮
+    const editKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '✏️ 修改内容', callback_data: `edit_content_${reminderId}` },
+          { text: '⏰ 修改时间', callback_data: `edit_time_${reminderId}` }
+        ],
+        [
+          { text: '🏷️ 修改分类', callback_data: `edit_category_${reminderId}` },
+          { text: '⭐ 修改优先级', callback_data: `edit_priority_${reminderId}` }
+        ],
+        [
+          { text: '🔙 返回', callback_data: `back_to_reminder_${reminderId}` }
+        ]
+      ]
+    };
+
+    // 格式化优先级显示
+    const priorityText = {
+      'urgent': '🔴 紧急',
+      'high': '🟡 重要',
+      'normal': '🟢 普通',
+      'low': '🔵 低'
+    }[reminder.priority] || '🟢 普通';
+    const editMessage = `✏️ 修改提醒\n\n💬 当前内容：${reminder.message}\n📅 当前时间：${reminder.reminderTime.toLocaleString('zh-CN', { timeZone: TIMEZONE })}\n🏷️ 当前分类：${reminder.category ? reminder.category.name : '无'}\n⭐ 当前优先级：${priorityText}\n\n请选择要修改的内容：`;
+
+    await bot.sendMessage(chatId, editMessage, {
+      reply_markup: editKeyboard
+    });
+
+    await bot.answerCallbackQuery(callbackQuery.id, '✏️ 请选择要修改的内容');
+  } catch (error) {
+    console.error('处理修改提醒失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理编辑选项
+async function handleEditOptions(callbackQuery, data) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    if (data.startsWith('edit_content_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      await handleEditContent(callbackQuery, reminderId);
+    } else if (data.startsWith('edit_time_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      await handleEditTime(callbackQuery, reminderId);
+    } else if (data.startsWith('edit_category_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      await handleEditCategory(callbackQuery, reminderId);
+    } else if (data.startsWith('edit_priority_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      await handleEditPriority(callbackQuery, reminderId);
+    } else if (data.startsWith('set_category_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      const categoryId = parseInt(data.split('_')[3]);
+      await handleSetCategory(callbackQuery, reminderId, categoryId);
+    } else if (data.startsWith('set_priority_')) {
+      const reminderId = parseInt(data.split('_')[2]);
+      const priority = data.split('_')[3];
+      await handleSetPriority(callbackQuery, reminderId, priority);
+    } else if (data.startsWith('back_to_reminder_')) {
+      const reminderId = parseInt(data.split('_')[3]);
+      await handleBackToReminder(callbackQuery, reminderId);
+    } else if (data.startsWith('back_to_edit_')) {
+      const reminderId = parseInt(data.split('_')[3]);
+      await handleBackToEditMenu(callbackQuery, reminderId);
+    }
+  } catch (error) {
+    console.error('处理编辑选项失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理修改内容
+async function handleEditContent(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    // 设置用户状态为等待输入新内容
+    userEditStates.set(userId, {
+      type: 'edit_content',
+      reminderId,
+      step: 'waiting_content'
+    });
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '🔙 取消', callback_data: `back_to_edit_${reminderId}` }]
+      ]
+    };
+
+    await bot.editMessageText(
+      `✏️ 修改提醒内容\n\n💬 当前内容：${reminder.message}\n\n请发送新的提醒内容：`,
+      {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        reply_markup: keyboard
+      }
+    );
+
+    await bot.answerCallbackQuery(callbackQuery.id, '✏️ 请发送新的提醒内容');
+  } catch (error) {
+    console.error('处理修改内容失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理修改时间
+async function handleEditTime(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    // 设置用户状态为等待输入新时间
+    userEditStates.set(userId, {
+      type: 'edit_time',
+      reminderId,
+      step: 'waiting_time'
+    });
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '🔙 取消', callback_data: `back_to_edit_${reminderId}` }]
+      ]
+    };
+
+    await bot.sendMessage(chatId, `⏰ 修改提醒时间\n\n📅 当前时间：${reminder.reminderTime.toLocaleString('zh-CN', { timeZone: TIMEZONE })}\n\n请发送新的时间，例如：\n• 今晚20点\n• 明天上午9点\n• 20:30`, {
+      reply_markup: keyboard
+    });
+
+    await bot.answerCallbackQuery(callbackQuery.id, '⏰ 请发送新的时间');
+  } catch (error) {
+    console.error('处理修改时间失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理修改分类
+async function handleEditCategory(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    const categories = await reminderService.getUserCategories(userId);
+    const keyboard = {
+      inline_keyboard: [
+        ...categories.map(cat => [{
+          text: `${cat.icon} ${cat.name}`,
+          callback_data: `set_category_${reminderId}_${cat.id}`
+        }]),
+        [{ text: '🔙 返回', callback_data: `back_to_edit_${reminderId}` }]
+      ]
+    };
+
+    await bot.sendMessage(chatId, `🏷️ 选择新分类\n\n💬 提醒内容：${reminder.message}\n🏷️ 当前分类：${reminder.category ? reminder.category.name : '无'}\n\n请选择新的分类：`, {
+      reply_markup: keyboard
+    });
+
+    await bot.answerCallbackQuery(callbackQuery.id, '🏷️ 请选择新分类');
+  } catch (error) {
+    console.error('处理修改分类失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理修改优先级
+async function handleEditPriority(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    const priorities = [
+      { text: '🔴 紧急', value: 'urgent' },
+      { text: '🟡 重要', value: 'high' },
+      { text: '🟢 普通', value: 'normal' },
+      { text: '🔵 低', value: 'low' }
+    ];
+
+    const keyboard = {
+      inline_keyboard: [
+        ...priorities.map(pri => [{
+          text: pri.text,
+          callback_data: `set_priority_${reminderId}_${pri.value}`
+        }]),
+        [{ text: '🔙 返回', callback_data: `back_to_edit_${reminderId}` }]
+      ]
+    };
+
+    // 格式化当前优先级显示
+    const currentPriorityText = {
+      'urgent': '🔴 紧急',
+      'high': '🟡 重要',
+      'normal': '🟢 普通',
+      'low': '🔵 低'
+    }[reminder.priority] || '🟢 普通';
+
+    await bot.editMessageText(
+      `⭐ 选择新优先级\n\n💬 提醒内容：${reminder.message}\n⭐ 当前优先级：${currentPriorityText}\n\n请选择新的优先级：`,
+      {
+        chat_id: chatId,
+        message_id: callbackQuery.message.message_id,
+        reply_markup: keyboard
+      }
+    );
+
+    await bot.answerCallbackQuery(callbackQuery.id, '⭐ 请选择新优先级');
+  } catch (error) {
+    console.error('处理修改优先级失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理返回编辑菜单
+async function handleBackToReminder(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    // 清除编辑状态
+    userEditStates.delete(userId);
+
+    // 返回提醒详情
+    const reminderMessage = formatReminderMessage(reminder);
+    await bot.sendMessage(chatId, reminderMessage, {
+      reply_markup: createActionButtons(reminderId)
+    });
+
+    await bot.answerCallbackQuery(callbackQuery.id, '🔙 已返回提醒详情');
+  } catch (error) {
+    console.error('处理返回提醒失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
+
+// 处理设置分类
+async function handleSetCategory(callbackQuery, reminderId, categoryId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.updateReminder(reminderId, userId, { categoryId });
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 设置分类失败');
+      return;
+    }
+
+    // 获取分类信息
+    const category = await reminderService.getCategoryById(categoryId);
+    
+    await bot.answerCallbackQuery(callbackQuery.id, `✅ 分类已设置为：${category.name}`);
+    
+    // 返回编辑菜单
+    await handleBackToEditMenu(callbackQuery, reminderId);
+  } catch (error) {
+    console.error('设置分类失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 设置分类失败');
+  }
+}
+
+// 处理设置优先级
+async function handleSetPriority(callbackQuery, reminderId, priority) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.updateReminder(reminderId, userId, { priority });
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 设置优先级失败');
+      return;
+    }
+
+    const priorityText = {
+      'urgent': '🔴 紧急',
+      'high': '🟡 重要',
+      'normal': '🟢 普通',
+      'low': '🔵 低'
+    }[priority] || priority;
+
+    await bot.answerCallbackQuery(callbackQuery.id, `✅ 优先级已设置为：${priorityText}`);
+    
+    // 返回编辑菜单
+    await handleBackToEditMenu(callbackQuery, reminderId);
+  } catch (error) {
+    console.error('设置优先级失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 设置优先级失败');
+  }
+}
+
+// 格式化提醒消息
+function formatReminderMessage(reminder) {
+  const timeStr = reminder.reminderTime.toLocaleString('zh-CN', { 
+    timeZone: TIMEZONE,
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  
+  let message = `⏰ 提醒\n\n📅 时间：${timeStr}\n💬 内容：${reminder.message}`;
+  
+  if (reminder.category) {
+    message += `\n🏷️ 分类：${reminder.category.name}`;
+  }
+  
+  if (reminder.priority) {
+    const priorityText = {
+      'urgent': '🔴 紧急',
+      'high': '🟡 重要',
+      'normal': '🟢 普通',
+      'low': '🔵 低'
+    }[reminder.priority] || reminder.priority;
+    message += `\n⭐ 优先级：${priorityText}`;
+  }
+  
+  if (reminder.tags && reminder.tags.length > 0) {
+    message += `\n🏷️ 标签：${reminder.tags.join(', ')}`;
+  }
+  
+  if (reminder.notes) {
+    message += `\n📝 备注：${reminder.notes}`;
+  }
+  
+  return message;
+}
+
+// 处理编辑输入
+async function handleEditInput(msg, editState) {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const { type, reminderId, step } = editState;
+  
+  try {
+    if (type === 'edit_content' && step === 'waiting_content') {
+      // 处理修改内容
+      const newContent = msg.text.trim();
+      if (newContent.length === 0) {
+        await bot.sendMessage(chatId, '❌ 内容不能为空，请重新输入');
+        return;
+      }
+
+      const reminder = await reminderService.updateReminder(reminderId, userId, { message: newContent });
+      if (!reminder) {
+        await bot.sendMessage(chatId, '❌ 修改内容失败');
+        return;
+      }
+
+      // 清除编辑状态
+      userEditStates.delete(userId);
+
+      await bot.sendMessage(chatId, `✅ 提醒内容已修改为：${newContent}`);
+      
+      // 重新发送提醒详情
+      const updatedReminder = await reminderService.getReminderById(reminderId, userId);
+      const reminderMessage = formatReminderMessage(updatedReminder);
+      await bot.sendMessage(chatId, reminderMessage, {
+        reply_markup: createActionButtons(reminderId)
+      });
+
+    } else if (type === 'edit_time' && step === 'waiting_time') {
+      // 处理修改时间
+      const newTime = smartParser.parseTimeExpression(msg.text);
+      if (!newTime) {
+        await bot.sendMessage(chatId, '❌ 无法识别时间，请使用以下格式：\n• 今晚20点\n• 明天上午9点\n• 20:30');
+        return;
+      }
+
+      const reminder = await reminderService.updateReminder(reminderId, userId, { reminderTime: newTime });
+      if (!reminder) {
+        await bot.sendMessage(chatId, '❌ 修改时间失败');
+        return;
+      }
+
+      // 清除编辑状态
+      userEditStates.delete(userId);
+
+      // 清除旧定时器
+      const oldTimer = reminderTimers.get(reminderId);
+      if (oldTimer) {
+        clearTimeout(oldTimer);
+      }
+
+      // 设置新定时器
+      const delay = newTime.getTime() - Date.now();
+      if (delay > 0) {
+        const timer = setTimeout(() => {
+          sendReminder(reminder);
+        }, delay);
+        reminderTimers.set(reminderId, timer);
+      }
+
+      await bot.sendMessage(chatId, `✅ 提醒时间已修改为：${newTime.toLocaleString('zh-CN', { timeZone: TIMEZONE })}`);
+      
+      // 重新发送提醒详情
+      const updatedReminder = await reminderService.getReminderById(reminderId, userId);
+      const reminderMessage = formatReminderMessage(updatedReminder);
+      await bot.sendMessage(chatId, reminderMessage, {
+        reply_markup: createActionButtons(reminderId)
+      });
+    }
+  } catch (error) {
+    console.error('处理编辑输入失败:', error);
+    await bot.sendMessage(chatId, '❌ 处理失败，请重试');
+    
+    // 清除编辑状态
+    userEditStates.delete(userId);
+  }
+}
+
+// 处理返回编辑菜单
+async function handleBackToEditMenu(callbackQuery, reminderId) {
+  const chatId = callbackQuery.message.chat.id;
+  const userId = callbackQuery.from.id;
+  
+  try {
+    const reminder = await reminderService.getReminderById(reminderId, userId);
+    if (!reminder) {
+      await bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+      return;
+    }
+
+    // 返回编辑选项
+    const editKeyboard = {
+      inline_keyboard: [
+        [
+          { text: '✏️ 修改内容', callback_data: `edit_content_${reminderId}` },
+          { text: '⏰ 修改时间', callback_data: `edit_time_${reminderId}` }
+        ],
+        [
+          { text: '🏷️ 修改分类', callback_data: `edit_category_${reminderId}` },
+          { text: '⭐ 修改优先级', callback_data: `edit_priority_${reminderId}` }
+        ],
+        [
+          { text: '🔙 返回', callback_data: `back_to_reminder_${reminderId}` }
+        ]
+      ]
+    };
+
+    // 格式化优先级显示
+    const priorityText = {
+      'urgent': '🔴 紧急',
+      'high': '🟡 重要',
+      'normal': '🟢 普通',
+      'low': '🔵 低'
+    }[reminder.priority] || '🟢 普通';
+
+    const editMessage = `✏️ 修改提醒\n\n💬 当前内容：${reminder.message}\n📅 当前时间：${reminder.reminderTime.toLocaleString('zh-CN', { timeZone: TIMEZONE })}\n🏷️ 当前分类：${reminder.category ? reminder.category.name : '无'}\n⭐ 当前优先级：${priorityText}\n\n请选择要修改的内容：`;
+
+    await bot.sendMessage(chatId, editMessage, {
+      reply_markup: editKeyboard
+    });
+
+    await bot.answerCallbackQuery(callbackQuery.id, '🔙 已返回编辑菜单');
+  } catch (error) {
+    console.error('处理返回编辑菜单失败:', error);
+    await bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+  }
+}
 
 // 处理新闻回调
 async function handleNewsCallback(callbackQuery, data) {
@@ -947,6 +1468,13 @@ bot.on('message', async (msg) => {
   }
   
   try {
+    // 检查是否处于编辑状态
+    const editState = userEditStates.get(msg.from.id);
+    if (editState) {
+      await handleEditInput(msg, editState);
+      return;
+    }
+
     // 新闻相关分流：命中则不进入创建提醒
     if (isNewsLikeQuery(msg.text)) {
       await routeNewsQuery(msg);
@@ -954,7 +1482,19 @@ bot.on('message', async (msg) => {
     }
 
     const response = await createReminder(msg, msg.text);
-    await bot.sendMessage(msg.chat.id, response);
+    
+    // 检查响应格式
+    if (typeof response === 'object' && response.text) {
+      // 新格式：可能包含按钮
+      const options = {};
+      if (response.keyboard) {
+        options.reply_markup = response.keyboard;
+      }
+      await bot.sendMessage(msg.chat.id, response.text, options);
+    } else {
+      // 旧格式：纯文本（错误情况）
+      await bot.sendMessage(msg.chat.id, response);
+    }
   } catch (error) {
     console.error('处理消息失败:', error);
     await bot.sendMessage(msg.chat.id, '❌ 处理失败，请重试');

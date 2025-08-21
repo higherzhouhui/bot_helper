@@ -89,6 +89,17 @@ class ReminderService {
     }
   }
 
+  // 根据ID获取分类
+  async getCategoryById(categoryId) {
+    try {
+      const category = await Category.findByPk(categoryId);
+      return category;
+    } catch (error) {
+      console.error('获取分类失败:', error);
+      throw error;
+    }
+  }
+
   // 创建提醒
   async createReminder(reminderData) {
     try {
@@ -173,6 +184,26 @@ class ReminderService {
     }
   }
 
+  // 根据ID获取提醒
+  async getReminderById(reminderId, userId) {
+    try {
+      const reminder = await Reminder.findOne({
+        where: { id: reminderId, userId },
+        include: [
+          {
+            model: Category,
+            as: 'category',
+            attributes: ['id', 'name', 'icon', 'color']
+          }
+        ]
+      });
+      return reminder;
+    } catch (error) {
+      console.error('获取提醒失败:', error);
+      throw error;
+    }
+  }
+
   // 更新提醒状态
   async updateReminderStatus(reminderId, status, repeatCount = 0) {
     try {
@@ -189,6 +220,39 @@ class ReminderService {
       return reminder;
     } catch (error) {
       console.error('更新提醒状态失败:', error);
+      throw error;
+    }
+  }
+
+  // 更新提醒内容
+  async updateReminder(reminderId, userId, updates) {
+    try {
+      const reminder = await Reminder.findOne({
+        where: { id: reminderId, userId }
+      });
+      
+      if (!reminder) {
+        throw new Error('提醒不存在或无权限修改');
+      }
+
+      // 只允许更新特定字段
+      const allowedUpdates = {};
+      if (updates.message !== undefined) allowedUpdates.message = updates.message;
+      if (updates.reminderTime !== undefined) allowedUpdates.reminderTime = updates.reminderTime;
+      if (updates.categoryId !== undefined) allowedUpdates.categoryId = updates.categoryId;
+      if (updates.priority !== undefined) allowedUpdates.priority = updates.priority;
+      if (updates.tags !== undefined) allowedUpdates.tags = updates.tags;
+      if (updates.notes !== undefined) allowedUpdates.notes = updates.notes;
+      if (updates.repeatPattern !== undefined) allowedUpdates.repeatPattern = updates.repeatPattern;
+
+      if (Object.keys(allowedUpdates).length === 0) {
+        throw new Error('没有可更新的字段');
+      }
+
+      await reminder.update(allowedUpdates);
+      return reminder;
+    } catch (error) {
+      console.error('更新提醒失败:', error);
       throw error;
     }
   }

@@ -1,12 +1,11 @@
 const { Sequelize } = require('sequelize');
-const path = require('path');
+const { config } = require('../config');
 
 // 创建 Sequelize 实例
-const DB_PATH = process.env.DB_PATH || path.resolve(process.cwd(), 'reminders.db');
 const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: DB_PATH,
-  logging: false, // 关闭 SQL 日志
+  dialect: config.DB_DIALECT,
+  storage: config.DB_STORAGE,
+  logging: config.DB_LOGGING,
   define: {
     timestamps: true,
     underscored: true
