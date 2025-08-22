@@ -254,16 +254,110 @@ class SmartParser {
   // 移除时间表达（不改变 parseTimeExpression 的解析逻辑）
   stripTimeExpressions(text) {
     let s = text;
-    const patterns = [
+    
+    // 第一步：优先清理最具体的时间表达式（带"分"字的完整时间）
+    const patternsWithFen = [
+      // 每天重复时间（扩展）
+      /每天\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /每天\s*\d{1,2}:\d{1,2}/gi,
+      /每日\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /每日\s*\d{1,2}:\d{1,2}/gi,
+      
+      // 明天/今天/后天时间（扩展）
+      /明天\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /明天\s*\d{1,2}:\d{1,2}/gi,
+      /今天\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /今天\s*\d{1,2}:\d{1,2}/gi,
+      /后天\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /后天\s*\d{1,2}:\d{1,2}/gi,
+      /今晚\s*\d{1,2}点\s*\d{1,2}分/gi,
+      /今晚\s*\d{1,2}:\d{1,2}/gi,
+      
+      // 下午/上午时间（新增）
+      /今天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
+      /明天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
+      /后天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
+      
+      // 周末/工作日（新增）
+      /这个\s*周末\s*\d{1,2}点\s*\d{1,2}/gi,
+      /下个\s*周末\s*\d{1,2}点\s*\d{1,2}/gi,
+      /工作日\s*\d{1,2}点\s*\d{1,2}/gi,
+      
+      // 过多少时间后（扩展）
+      /过\s*\d+\s*小时\s*后/gi,
+      /过\s*\d+\s*分钟\s*后/gi,
+      /过\s*\d+\s*秒\s*后/gi,
+      /再过\s*\d+\s*小时/gi,
+      /再过\s*\d+\s*分钟/gi,
+      /再过\s*\d+\s*秒/gi,
+      
+      // 几点几分（多种表达）
+      /\d{1,2}\s*点\s*\d{1,2}\s*分/gi,
+      /\d{1,2}[:：]\d{1,2}/gi,
+      
+      // 传统带"分"字格式
+      /\b\d{1,2}点\s*\d{1,2}分/g,  // 优先匹配"20点05分"
+    ];
+    
+    // 第二步：清理半点时间表达式（优先于普通时间）
+    const patternsHalfHour = [
+      /\d{1,2}点半/gi,
+      /明天\s*\d{1,2}点半/gi,
+      /今天\s*\d{1,2}点半/gi,
+      /后天\s*\d{1,2}点半/gi,
+      /今晚\s*\d{1,2}点半/gi,
+      /每天\s*\d{1,2}点半/gi,
+      /每日\s*\d{1,2}点半/gi,
+    ];
+    
+    // 第三步：清理一刻钟时间表达式
+    const patternsQuarterHour = [
+      /\d{1,2}点一刻/gi,
+      /\d{1,2}点三刻/gi,
+      /明天\s*\d{1,2}点一刻/gi,
+      /今天\s*\d{1,2}点一刻/gi,
+    ];
+    
+    // 第四步：清理整点时间表达式
+    const patternsExactHour = [
+      /\d{1,2}点整/gi,
+      /明天\s*\d{1,2}点整/gi,
+      /今天\s*\d{1,2}点整/gi,
+      /后天\s*\d{1,2}点整/gi,
+      /今晚\s*\d{1,2}点整/gi,
+      /每天\s*\d{1,2}点整/gi,
+      /每日\s*\d{1,2}点整/gi,
+    ];
+    
+    // 第五步：清理不带"分"字的时间表达式
+    const patternsWithoutFen = [
+      // 每天20点05（不带分）
+      /每天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      /每日\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      
+      // 明天20点05（不带分）
+      /明天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      
+      // 今天20点05（不带分）
+      /今天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      
+      // 后天20点05（不带分）
+      /后天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      
+      // 今晚20点05（不带分）
+      /今晚\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
+      
+      // 其他时间格式
       /今晚\s*\d{1,2}点(?:\d{1,2}分)?/gi,
       /今天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
       /明天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
       /后天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
+      
       /\b\d{1,2}:\d{1,2}\b/g,
       /\b\d{1,2}点(?:\d{1,2}分)?/g,
       /在\s*\d{1,2}(?::\d{1,2})?点?(?:\d{1,2}分)?/g,
       
-      // 英文简写时间单位（新增）
+      // 英文简写时间单位
       /\d+\s*[Ss]\s*后/gi,  // 秒：10s、10S
       /\d+\s*[Mm]\s*后/gi,  // 分钟：1m、1M
       /\d+\s*[Hh]\s*后/gi,  // 小时：1h、1H
@@ -286,10 +380,37 @@ class SmartParser {
       /(一|两|三|四|五|六|七|八|九|十|百|千|万)\s*天\s*后/gi,
       /\d+\s*天\s*后/gi
     ];
-    for (const p of patterns) s = s.replace(p, '');
+    
+    // 第六步：清理工作时间表达
+    const patternsWorkTime = [
+      /上班时间/gi,
+      /下班时间/gi,
+      /午休时间/gi,
+      /早上起床/gi,
+      /晚上睡觉/gi,
+    ];
+    
+    // 按优先级顺序清理
+    // 1. 先清理最具体的时间表达式
+    for (const p of patternsWithFen) s = s.replace(p, '');
+    
+    // 2. 清理半点时间
+    for (const p of patternsHalfHour) s = s.replace(p, '');
+    
+    // 3. 清理一刻钟时间
+    for (const p of patternsQuarterHour) s = s.replace(p, '');
+    
+    // 4. 清理整点时间
+    for (const p of patternsExactHour) s = s.replace(p, '');
+    
+    // 5. 清理不带"分"字的时间
+    for (const p of patternsWithoutFen) s = s.replace(p, '');
+    
+    // 6. 清理工作时间表达
+    for (const p of patternsWorkTime) s = s.replace(p, '');
 
     // 移除调度/频率词
-    const scheduleWords = ['每天', '每日', '天天', '每周', '每月', '每年', '工作日', '周末'];
+    const scheduleWords = ['天天', '每周', '每月', '每年', '工作日', '周末'];
     for (const w of scheduleWords) {
       const re = new RegExp(w, 'g');
       s = s.replace(re, '');
@@ -302,19 +423,101 @@ class SmartParser {
       s = s.replace(re, '');
     }
 
+    // 额外清理：移除可能残留的时间相关词汇
+    s = s.replace(/\b\d+分\b/g, '');
+    s = s.replace(/\b(半|一刻|三刻)\b/g, '');
+    s = s.replace(/\b(过|再过)\b/g, '');
+    s = s.replace(/\b整\b/g, '');
+    
+    // 清理多余的空格
+    s = s.replace(/\s+/g, ' ').trim();
+
     return s;
   }
 
   // 解析时间表达式（增强版）
   parseTimeExpression(text) {
     const timePatterns = [
-      // 今晚20点
+      // 每天重复时间（扩展）
+      { pattern: /每天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dailyTime' },
+      { pattern: /每天\s*(\d{1,2}):(\d{1,2})/, type: 'dailyTime' },
+      { pattern: /每日\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dailyTime' },
+      { pattern: /每日\s*(\d{1,2}):(\d{1,2})/, type: 'dailyTime' },
+      { pattern: /每天\s*(\d{1,2})点/, type: 'dailySimple' },
+      { pattern: /每日\s*(\d{1,2})点/, type: 'dailySimple' },
+      
+      // 明天时间（扩展）
+      { pattern: /明天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tomorrowTime' },
+      { pattern: /明天\s*(\d{1,2}):(\d{1,2})/, type: 'tomorrowTime' },
+      
+      // 今天时间（扩展）
+      { pattern: /今天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'todayTime' },
+      { pattern: /今天\s*(\d{1,2}):(\d{1,2})/, type: 'todayTime' },
+      
+      // 后天时间（扩展）
+      { pattern: /后天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dayAfterTomorrowTime' },
+      { pattern: /后天\s*(\d{1,2}):(\d{1,2})/, type: 'dayAfterTomorrowTime' },
+      
+      // 今晚时间（扩展）
+      { pattern: /今晚\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tonightTime' },
+      { pattern: /今晚\s*(\d{1,2}):(\d{1,2})/, type: 'tonightTime' },
+      
+      // 下午/上午时间（新增）
+      { pattern: /今天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'todayWithTimeOfDay' },
+      { pattern: /明天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tomorrowWithTimeOfDay' },
+      { pattern: /后天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dayAfterTomorrowWithTimeOfDay' },
+      
+      // 周末/工作日（新增）
+      { pattern: /这个\s*周末\s*(\d{1,2})点\s*(\d{1,2})/, type: 'thisWeekend' },
+      { pattern: /下个\s*周末\s*(\d{1,2})点\s*(\d{1,2})/, type: 'nextWeekend' },
+      { pattern: /工作日\s*(\d{1,2})点\s*(\d{1,2})/, type: 'weekday' },
+      
+      // 过多少时间后（扩展）
+      { pattern: /过\s*(\d+)\s*小时\s*后/, type: 'hoursLater' },
+      { pattern: /过\s*(\d+)\s*分钟\s*后/, type: 'minutesLater' },
+      { pattern: /过\s*(\d+)\s*秒\s*后/, type: 'secondsLater' },
+      { pattern: /再过\s*(\d+)\s*小时/, type: 'hoursLater' },
+      { pattern: /再过\s*(\d+)\s*分钟/, type: 'minutesLater' },
+      { pattern: /再过\s*(\d+)\s*秒/, type: 'secondsLater' },
+      
+      // 几点几分（多种表达）
+      { pattern: /(\d{1,2})\s*点\s*(\d{1,2})\s*分/, type: 'time' },
+      { pattern: /(\d{1,2})\s*点\s*(\d{1,2})/, type: 'time' },
+      { pattern: /(\d{1,2})[:：](\d{1,2})/, type: 'time' },
+      
+      // 整点时间（新增）
+      { pattern: /(\d{1,2})点整/, type: 'exactHour' },
+      { pattern: /明天\s*(\d{1,2})点整/, type: 'tomorrowExactHour' },
+      { pattern: /今天\s*(\d{1,2})点整/, type: 'todayExactHour' },
+      { pattern: /后天\s*(\d{1,2})点整/, type: 'dayAfterTomorrowExactHour' },
+      { pattern: /今晚\s*(\d{1,2})点整/, type: 'tonightExactHour' },
+      { pattern: /每天\s*(\d{1,2})点整/, type: 'dailyExactHour' },
+      { pattern: /每日\s*(\d{1,2})点整/, type: 'dailyExactHour' },
+      
+      // 半点时间（新增）
+      { pattern: /(\d{1,2})点半/, type: 'halfHour' },
+      { pattern: /明天\s*(\d{1,2})点半/, type: 'tomorrowHalfHour' },
+      { pattern: /今天\s*(\d{1,2})点半/, type: 'todayHalfHour' },
+      { pattern: /后天\s*(\d{1,2})点半/, type: 'dayAfterTomorrowHalfHour' },
+      { pattern: /今晚\s*(\d{1,2})点半/, type: 'tonightHalfHour' },
+      
+      // 一刻钟时间（新增）
+      { pattern: /(\d{1,2})点一刻/, type: 'quarterHour' },
+      { pattern: /(\d{1,2})点三刻/, type: 'threeQuarterHour' },
+      { pattern: /明天\s*(\d{1,2})点一刻/, type: 'tomorrowQuarterHour' },
+      { pattern: /今天\s*(\d{1,2})点一刻/, type: 'todayQuarterHour' },
+      
+      // 工作时间表达（新增）
+      { pattern: /上班时间/, type: 'workTime' },
+      { pattern: /下班时间/, type: 'offWorkTime' },
+      { pattern: /午休时间/, type: 'lunchTime' },
+      { pattern: /早上起床/, type: 'morningWakeUp' },
+      { pattern: /晚上睡觉/, type: 'nightSleep' },
+      
+      // 原有的时间表达式保持不变
       { pattern: /今晚\s*(\d{1,2})点/, type: 'tonight' },
-      // 明天上午9点
       { pattern: /明天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点/, type: 'tomorrow' },
-      // 今天下午3点
       { pattern: /今天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点/, type: 'today' },
-      // 后天上午10点
       { pattern: /后天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点/, type: 'dayAfterTomorrow' },
       
       // 相对日期：一天后、两天后、三天后（带时间）
@@ -328,11 +531,6 @@ class SmartParser {
       // 标准时间格式 20:30
       { pattern: /(\d{1,2}):(\d{1,2})/, type: 'time' },
       
-      // 中文时间格式 20点30分
-      { pattern: /(\d{1,2})点(\d{1,2})分/, type: 'time' },
-      // 20点30 (省略"分")
-      { pattern: /(\d{1,2})点\s*(\d{1,2})(?!分)/, type: 'time' },
-      
       // 明天上午9点30分
       { pattern: /明天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点\s*(\d{1,2})分/, type: 'tomorrowWithMinutes' },
       // 今天下午3点15分
@@ -343,19 +541,17 @@ class SmartParser {
       // 今晚20点30分
       { pattern: /今晚\s*(\d{1,2})点\s*(\d{1,2})分/, type: 'tonightWithMinutes' },
       
-      // 英文简写时间单位（新增）
-      { pattern: /(\d+)\s*[Ss]\s*后/, type: 'secondsLater' }, // 秒：10s、10S
-      { pattern: /(\d+)\s*[Mm]\s*后/, type: 'minutesLater' }, // 分钟：1m、1M
-      { pattern: /(\d+)\s*[Hh]\s*后/, type: 'hoursLater' },   // 小时：1h、1H
-      { pattern: /(\d+)\s*[Dd]\s*后/, type: 'daysLater' },    // 天：1d、1D
+      // 英文简写时间单位
+      { pattern: /(\d+)\s*[Ss]\s*后/, type: 'secondsLater' },
+      { pattern: /(\d+)\s*[Mm]\s*后/, type: 'minutesLater' },
+      { pattern: /(\d+)\s*[Hh]\s*后/, type: 'hoursLater' },
+      { pattern: /(\d+)\s*[Dd]\s*后/, type: 'daysLater' },
       
       // 相对时间：1小时后、2小时后
       { pattern: /(\d+)\s*小时\s*后/, type: 'hoursLater' },
       { pattern: /(\d+)\s*小时后/, type: 'hoursLater' },
-      // 相对时间：30分钟后、15分钟后
       { pattern: /(\d+)\s*分钟\s*后/, type: 'minutesLater' },
       { pattern: /(\d+)\s*分钟后/, type: 'minutesLater' },
-      // 相对时间：30秒后、15秒后
       { pattern: /(\d+)\s*秒\s*后/, type: 'secondsLater' },
       { pattern: /(\d+)\s*秒后/, type: 'secondsLater' },
       
@@ -433,7 +629,322 @@ class SmartParser {
     const now = new Date();
     let targetTime = new Date();
     
-    if (type === 'tonight') {
+    if (type === 'dailyTime') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, minute, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tomorrowTime') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(hour, minute, 0, 0);
+      
+    } else if (type === 'todayTime') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, minute, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'dayAfterTomorrowTime') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      targetTime.setDate(now.getDate() + 2);
+      targetTime.setHours(hour, minute, 0, 0);
+      
+    } else if (type === 'tonightTime') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, minute, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'dailySimple') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      // 如果时间已过，设置为明天
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'todayWithTimeOfDay') {
+      const timeOfDay = match[1];
+      const hour = parseInt(match[2]);
+      const minute = parseInt(match[3]);
+      let adjustedHour = hour;
+      
+      if (timeOfDay === '下午' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '晚上' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '上午' && hour === 12) {
+        adjustedHour = 0;
+      }
+      
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(adjustedHour, minute, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tomorrowWithTimeOfDay') {
+      const timeOfDay = match[1];
+      const hour = parseInt(match[2]);
+      const minute = parseInt(match[3]);
+      let adjustedHour = hour;
+      
+      if (timeOfDay === '下午' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '晚上' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '上午' && hour === 12) {
+        adjustedHour = 0;
+      }
+      
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(adjustedHour, minute, 0, 0);
+      
+    } else if (type === 'dayAfterTomorrowWithTimeOfDay') {
+      const timeOfDay = match[1];
+      const hour = parseInt(match[2]);
+      const minute = parseInt(match[3]);
+      let adjustedHour = hour;
+      
+      if (timeOfDay === '下午' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '晚上' && hour < 12) {
+        adjustedHour = hour + 12;
+      } else if (timeOfDay === '上午' && hour === 12) {
+        adjustedHour = 0;
+      }
+      
+      targetTime.setDate(now.getDate() + 2);
+      targetTime.setHours(adjustedHour, minute, 0, 0);
+      
+    } else if (type === 'halfHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 30, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tomorrowHalfHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(hour, 30, 0, 0);
+      
+    } else if (type === 'todayHalfHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 30, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'dayAfterTomorrowHalfHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate() + 2);
+      targetTime.setHours(hour, 30, 0, 0);
+      
+    } else if (type === 'tonightHalfHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 30, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'quarterHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 15, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'threeQuarterHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 45, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tomorrowQuarterHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(hour, 15, 0, 0);
+      
+    } else if (type === 'todayQuarterHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 15, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'workTime') {
+      // 默认上班时间：早上9点
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(9, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'offWorkTime') {
+      // 默认下班时间：下午6点
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(18, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'lunchTime') {
+      // 默认午休时间：中午12点
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(12, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'morningWakeUp') {
+      // 默认起床时间：早上7点
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(7, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'nightSleep') {
+      // 默认睡觉时间：晚上11点
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(23, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'thisWeekend') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      
+      // 计算这个周末（周六）
+      const today = now.getDay(); // 0=周日, 1=周一, ..., 6=周六
+      const daysUntilSaturday = (6 - today + 7) % 7;
+      const saturday = new Date(now);
+      saturday.setDate(now.getDate() + (daysUntilSaturday === 0 ? 7 : daysUntilSaturday));
+      
+      targetTime.setDate(saturday.getDate());
+      targetTime.setHours(hour, minute, 0, 0);
+      
+    } else if (type === 'nextWeekend') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      
+      // 计算下个周末（下周六）
+      const today = now.getDay();
+      const daysUntilNextSaturday = (6 - today + 7) % 7 + 7;
+      const nextSaturday = new Date(now);
+      nextSaturday.setDate(now.getDate() + daysUntilNextSaturday);
+      
+      targetTime.setDate(nextSaturday.getDate());
+      targetTime.setHours(hour, minute, 0, 0);
+      
+    } else if (type === 'weekday') {
+      const hour = parseInt(match[1]);
+      const minute = parseInt(match[2]);
+      
+      // 计算下一个工作日
+      const today = now.getDay();
+      let daysUntilWeekday = 1;
+      
+      if (today === 0) { // 周日
+        daysUntilWeekday = 1; // 下周一
+      } else if (today === 6) { // 周六
+        daysUntilWeekday = 2; // 下周一
+      } else { // 周一到周五
+        daysUntilWeekday = 1; // 明天
+      }
+      
+      targetTime.setDate(now.getDate() + daysUntilWeekday);
+      targetTime.setHours(hour, minute, 0, 0);
+      
+    } else if (type === 'exactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tomorrowExactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate() + 1);
+      targetTime.setHours(hour, 0, 0, 0);
+      
+    } else if (type === 'todayExactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'dayAfterTomorrowExactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate() + 2);
+      targetTime.setHours(hour, 0, 0, 0);
+      
+    } else if (type === 'tonightExactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'dailyExactHour') {
+      const hour = parseInt(match[1]);
+      targetTime.setDate(now.getDate());
+      targetTime.setHours(hour, 0, 0, 0);
+      
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+      
+    } else if (type === 'tonight') {
       const hour = parseInt(match[1]);
       targetTime.setDate(now.getDate());
       targetTime.setHours(hour, 0, 0, 0);
