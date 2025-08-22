@@ -1,9 +1,3 @@
-# 环境变量文件
-.env
-.env.dev
-.env.local
-.env.production
-
 # 数据库文件
 data/
 *.sqlite

@@ -1,7 +1,7 @@
 {
-  "name": "telegram-reminder-bot",
+  "name": "xiaozhi-assistant",
   "version": "1.0.0",
-  "description": "智能提醒助手 + 新闻资讯机器人",
+  "description": "🚀 小智助手 - 智能提醒 + 资讯聚合机器人，你的贴心智能小管家",
   "main": "src/bot.js",
   "scripts": {
     "start": "NODE_ENV=production node src/bot.js",
@@ -18,14 +18,31 @@
     "pm2:logs": "pm2 logs --lines 200"
   },
   "keywords": [
+    "xiaozhi",
+    "assistant",
     "telegram",
     "bot",
     "reminder",
     "news",
-    "assistant"
+    "web3",
+    "ai",
+    "smart",
+    "intelligent",
+    "chatbot",
+    "productivity",
+    "time-management",
+    "information-aggregation"
   ],
-  "author": "Your Name",
+  "author": "小智助手团队",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/xiaozhi-assistant.git"
+  },
+  "homepage": "https://github.com/your-username/xiaozhi-assistant#readme",
+  "bugs": {
+    "url": "https://github.com/your-username/xiaozhi-assistant/issues"
+  },
   "dependencies": {
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",

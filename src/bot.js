@@ -353,7 +353,18 @@ class TelegramReminderBot {
     try {
       const reminder = await reminderService.completeReminder(reminderId, userId);
       if (reminder) {
-        await this.bot.sendMessage(chatId, '✅ 提醒已完成！');
+        // 编辑原消息，显示完成状态
+        try {
+          await this.bot.editMessageText('✅ 提醒已完成！', {
+            chat_id: chatId,
+            message_id: callbackQuery.message.message_id,
+            reply_markup: { inline_keyboard: [] } // 清空按钮
+          });
+        } catch (editError) {
+          console.warn('无法编辑消息:', editError.message);
+          // 如果无法编辑，发送新消息
+          await this.bot.sendMessage(chatId, '✅ 提醒已完成！');
+        }
         await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 提醒已完成');
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
@@ -371,9 +382,20 @@ class TelegramReminderBot {
     const reminderId = parseInt(callbackQuery.data.split('_')[1]);
 
     try {
-      const reminder = await reminderService.delayReminder(reminderId,  new Date(Date.now() + 10 * 60 * 1000));
+      const reminder = await reminderService.delayReminder(reminderId, new Date(Date.now() + 10 * 60 * 1000));
       if (reminder) {
-        await this.bot.sendMessage(chatId, '⏰ 提醒已延后10分钟！');
+        // 编辑原消息，显示延后状态
+        try {
+          await this.bot.editMessageText('⏰ 提醒已延后10分钟！', {
+            chat_id: chatId,
+            message_id: callbackQuery.message.message_id,
+            reply_markup: { inline_keyboard: [] } // 清空按钮
+          });
+        } catch (editError) {
+          console.warn('无法编辑消息:', editError.message);
+          // 如果无法编辑，发送新消息
+          await this.bot.sendMessage(chatId, '⏰ 提醒已延后10分钟！');
+        }
         await this.bot.answerCallbackQuery(callbackQuery.id, '⏰ 提醒已延后');
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
@@ -390,9 +412,20 @@ class TelegramReminderBot {
     const reminderId = parseInt(callbackQuery.data.split('_')[1]);
 
     try {
-      const reminder = await reminderService.snoozeReminder(reminderId,  new Date(Date.now() + 5 * 60 * 1000));
+      const reminder = await reminderService.snoozeReminder(reminderId, new Date(Date.now() + 5 * 60 * 1000));
       if (reminder) {
-        await this.bot.sendMessage(chatId, '🔔 提醒已小睡5分钟！');
+        // 编辑原消息，显示小睡状态
+        try {
+          await this.bot.editMessageText('🔔 提醒已小睡5分钟！', {
+            chat_id: chatId,
+            message_id: callbackQuery.message.message_id,
+            reply_markup: { inline_keyboard: [] } // 清空按钮
+          });
+        } catch (editError) {
+          console.warn('无法编辑消息:', editError.message);
+          // 如果无法编辑，发送新消息
+          await this.bot.sendMessage(chatId, '🔔 提醒已小睡5分钟！');
+        }
         await this.bot.answerCallbackQuery(callbackQuery.id, '🔔 提醒已小睡');
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
@@ -412,7 +445,22 @@ class TelegramReminderBot {
     try {
       const result = await reminderService.deleteReminder(reminderId, userId);
       if (result) {
-        await this.bot.sendMessage(chatId, '🗑️ 提醒已删除！');
+        // 删除原来的消息
+        try {
+          await this.bot.deleteMessage(callbackQuery.id, callbackQuery.message.message_id);
+        } catch (deleteError) {
+          console.warn('无法删除消息:', deleteError.message);
+          // 如果无法删除消息，则编辑消息内容
+          try {
+            await this.bot.editMessageText('🗑️ 提醒已删除！', {
+              chat_id: chatId,
+              message_id: callbackQuery.message.message_id,
+              reply_markup: { inline_keyboard: [] } // 清空按钮
+            });
+          } catch (editError) {
+            console.warn('无法编辑消息:', editError.message);
+          }
+        }
         await this.bot.answerCallbackQuery(callbackQuery.id, '🗑️ 提醒已删除');
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
