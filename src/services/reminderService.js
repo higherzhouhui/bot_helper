@@ -875,7 +875,12 @@ class ReminderService {
             {
               lastSentAt: { [Sequelize.Op.lte]: oneMinuteAgo },
               status: 'pending',
-              sentCount: { [Sequelize.Op.lt]: Sequelize.col('maxSentCount') }
+              sentCount: { 
+                [Sequelize.Op.and]: [
+                  { [Sequelize.Op.gt]: 0 }, // 已经发送过至少一次
+                  { [Sequelize.Op.lt]: Sequelize.col('maxSentCount') } // 未达到最大发送次数
+                ]
+              }
             },
             // 小睡提醒：到达小睡时间
             {

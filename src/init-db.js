@@ -14,7 +14,7 @@ async function initializeDatabase() {
 
     // 同步所有模型（创建表）
     console.log('正在创建数据库表...');
-    await sequelize.sync({ force: false });
+    await sequelize.sync({ force: false, alter: true });
     console.log('✅ 数据库表创建成功');
 
     // 创建索引
@@ -28,7 +28,6 @@ async function initializeDatabase() {
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_reminders_priority ON reminders(priority)');
       
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_reminder_history_user_id ON reminder_history(user_id)');
-      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_reminder_history_completed_at ON reminder_history(completed_at)');
       
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_categories_user_id ON categories(user_id)');
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_templates_user_id ON reminder_templates(user_id)');

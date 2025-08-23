@@ -536,7 +536,7 @@ class TelegramReminderBot {
   // 初始化提醒定时器
   async initReminderTimer() {
     try {
-      // 每分钟检查一次提醒（60秒 = 60000毫秒）
+      // 每10秒检查一次提醒
       setInterval(async () => {
         try {
           const dueReminders = await reminderService.getDueReminders();
@@ -549,9 +549,9 @@ class TelegramReminderBot {
         } catch (error) {
           console.error('检查提醒失败:', error);
         }
-      }, 60 * 1000); // 固定为60秒
+      }, 10 * 1000); // 固定为10秒
 
-      console.log('⏰ 提醒定时器已启动（每分钟检查一次）');
+      console.log('⏰ 提醒定时器已启动（每10秒检查一次）');
     } catch (error) {
       console.error('启动提醒定时器失败:', error);
     }
