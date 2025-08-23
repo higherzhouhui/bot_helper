@@ -202,6 +202,14 @@ class TelegramReminderBot {
     const userId = msg.from.id;
     const text = msg.text;
 
+    // 确保用户存在（防止数据库被清空后用户信息丢失）
+    try {
+      await reminderService.createOrUpdateUser(msg.from);
+    } catch (userError) {
+      console.error(`确保用户存在失败 (用户ID: ${userId}):`, userError);
+      // 不阻断消息处理，继续执行
+    }
+
     // 检查用户编辑状态
     const editState = this.userEditStates.get(userId);
     if (editState) {
@@ -327,6 +335,13 @@ class TelegramReminderBot {
     const data = callbackQuery.data;
     
     try {
+      // 确保用户存在（防止数据库被清空后用户信息丢失）
+      try {
+        await reminderService.createOrUpdateUser(callbackQuery.from);
+      } catch (userError) {
+        console.error(`确保用户存在失败 (用户ID: ${callbackQuery.from.id}):`, userError);
+        // 不阻断回调处理，继续执行
+      }
       // 优先处理特定的编辑操作
       if (data.startsWith('edit_content_') || data.startsWith('edit_time_') || 
           data.startsWith('edit_category_') || data.startsWith('edit_priority_') ||
@@ -591,6 +606,20 @@ class TelegramReminderBot {
     try {
       const chatId = reminder.chatId;
       
+      // 确保用户存在（防止数据库被清空后用户信息丢失）
+      try {
+        const userData = {
+          id: reminder.userId,
+          is_bot: false,
+          first_name: 'User',
+          username: `user_${reminder.userId}`
+        };
+        await reminderService.createOrUpdateUser(userData);
+      } catch (userError) {
+        console.error(`确保用户存在失败 (用户ID: ${reminder.userId}):`, userError);
+        // 不阻断提醒发送，继续执行
+      }
+      
       // 构建提醒消息
       let message = `⏰ <b>提醒时间到！</b>\n\n💬 <b>${reminder.message}</b>\n📅 ${reminder.reminderTime.toLocaleString('zh-CN')}`;
       
@@ -729,6 +758,20 @@ class TelegramReminderBot {
         const userIds = await userService.getUsersToBriefAt(hhmm);
         for (const uid of userIds) {
           try {
+            // 确保用户存在（防止数据库被清空后用户信息丢失）
+            try {
+              const userData = {
+                id: uid,
+                is_bot: false,
+                first_name: 'User',
+                username: `user_${uid}`
+              };
+              await reminderService.createOrUpdateUser(userData);
+            } catch (userError) {
+              console.error(`确保用户存在失败 (用户ID: ${uid}):`, userError);
+              // 不阻断简报发送，继续执行
+            }
+            
             const inQuiet = await userService.isInQuietHours(uid, now);
             if (inQuiet) continue;
             const brief = await newsService.getPersonalizedBrief(uid, 8);
@@ -778,6 +821,20 @@ class TelegramReminderBot {
           const reportMessage = this.formatDailyReport(report);
           for (const adminId of config.ADMIN_USER_IDS) {
             try {
+              // 确保管理员用户存在（防止数据库被清空后用户信息丢失）
+              try {
+                const userData = {
+                  id: adminId,
+                  is_bot: false,
+                  first_name: 'Admin',
+                  username: `admin_${adminId}`
+                };
+                await reminderService.createOrUpdateUser(userData);
+              } catch (userError) {
+                console.error(`确保管理员用户存在失败 (用户ID: ${adminId}):`, userError);
+                // 不阻断报告发送，继续执行
+              }
+              
               await this.bot.sendMessage(adminId, reportMessage, { parse_mode: 'HTML' });
             } catch (error) {
               console.error(`发送统计报告给管理员 ${adminId} 失败:`, error);
