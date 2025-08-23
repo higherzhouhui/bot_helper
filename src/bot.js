@@ -351,11 +351,19 @@ class TelegramReminderBot {
     const reminderId = parseInt(callbackQuery.data.split('_')[1]);
 
     try {
-      const reminder = await reminderService.completeReminder(reminderId, userId);
-      if (reminder) {
+      const result = await reminderService.completeReminder(reminderId, userId);
+      if (result && result.success) {
+        // 构建完成消息
+        let completedMessage = '✅ 提醒已完成！';
+        if (result.hasNext && result.nextTime) {
+          const { getRepeatText } = require('./utils/reminderUtils');
+          const repeatText = getRepeatText(result.repeatPattern);
+          completedMessage += `\n\n🔄 下一次${repeatText}提醒：${result.nextTime.toLocaleString('zh-CN')}`;
+        }
+
         // 编辑原消息，显示完成状态
         try {
-          await this.bot.editMessageText('✅ 提醒已完成！', {
+          await this.bot.editMessageText(completedMessage, {
             chat_id: chatId,
             message_id: callbackQuery.message.message_id,
             reply_markup: { inline_keyboard: [] } // 清空按钮
@@ -363,9 +371,11 @@ class TelegramReminderBot {
         } catch (editError) {
           console.warn('无法编辑消息:', editError.message);
           // 如果无法编辑，发送新消息
-          await this.bot.sendMessage(chatId, '✅ 提醒已完成！');
+          await this.bot.sendMessage(chatId, completedMessage);
         }
-        await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 提醒已完成');
+        
+        const callbackMessage = result.hasNext ? '✅ 提醒已完成，已创建下一次提醒' : '✅ 提醒已完成';
+        await this.bot.answerCallbackQuery(callbackQuery.id, callbackMessage);
       } else {
         await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
       }
@@ -526,19 +536,22 @@ class TelegramReminderBot {
   // 初始化提醒定时器
   async initReminderTimer() {
     try {
-      // 每间隔配置的毫秒检查一次提醒（config 已是毫秒）
+      // 每分钟检查一次提醒（60秒 = 60000毫秒）
       setInterval(async () => {
         try {
           const dueReminders = await reminderService.getDueReminders();
           for (const reminder of dueReminders) {
             await this.sendReminder(reminder);
           }
+          
+          // 清理达到最大发送次数的提醒
+          await reminderService.cleanupMaxSentReminders();
         } catch (error) {
           console.error('检查提醒失败:', error);
         }
-      }, config.REMINDER_CHECK_INTERVAL);
+      }, 60 * 1000); // 固定为60秒
 
-      console.log('⏰ 提醒定时器已启动');
+      console.log('⏰ 提醒定时器已启动（每分钟检查一次）');
     } catch (error) {
       console.error('启动提醒定时器失败:', error);
     }
@@ -548,7 +561,19 @@ class TelegramReminderBot {
   async sendReminder(reminder) {
     try {
       const chatId = reminder.chatId;
-      const message = `⏰ 提醒时间到！\n\n💬 ${reminder.message}\n📅 ${reminder.reminderTime.toLocaleString('zh-CN')}`;
+      
+      // 构建提醒消息
+      let message = `⏰ 提醒时间到！\n\n💬 ${reminder.message}\n📅 ${reminder.reminderTime.toLocaleString('zh-CN')}`;
+      
+      // 如果是重复提醒，显示次数信息
+      if (reminder.sentCount && reminder.sentCount > 0) {
+        const remainingCount = (reminder.maxSentCount || 5) - reminder.sentCount;
+        if (remainingCount > 0) {
+          message += `\n🔄 第${reminder.sentCount + 1}次提醒 (还剩${remainingCount}次)`;
+        } else {
+          message += `\n⚠️ 最后一次提醒`;
+        }
+      }
 
       const keyboard = {
         inline_keyboard: [

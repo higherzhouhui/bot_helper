@@ -161,6 +161,22 @@ const Reminder = sequelize.define('Reminder', {
     type: Sequelize.DATE,
     allowNull: true,
     field: 'repeat_end_date'
+  },
+  // 新增：跟踪提醒发送状态
+  lastSentAt: {
+    type: Sequelize.DATE,
+    allowNull: true,
+    field: 'last_sent_at'
+  },
+  sentCount: {
+    type: Sequelize.INTEGER,
+    defaultValue: 0,
+    field: 'sent_count'
+  },
+  maxSentCount: {
+    type: Sequelize.INTEGER,
+    defaultValue: 5,
+    field: 'max_sent_count'
   }
 }, {
   tableName: 'reminders',

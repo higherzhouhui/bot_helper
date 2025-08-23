@@ -1,5 +1,6 @@
 const { User, Category, Reminder, ReminderHistory, ReminderTemplate } = require('../models');
 const Sequelize = require('sequelize');
+const { calculateNextReminderTime } = require('../utils/dateUtils');
 
 class ReminderService {
   // 创建或更新用户
@@ -320,10 +321,49 @@ class ReminderService {
         tags: reminder.tags
       });
 
+      let nextReminderCreated = false;
+      let nextReminderTime = null;
+
+      // 检查是否是重复提醒，如果是则创建下一次提醒
+      if (reminder.repeatPattern && reminder.repeatPattern !== 'none') {
+        nextReminderTime = calculateNextReminderTime(reminder.reminderTime, reminder.repeatPattern);
+        
+        if (nextReminderTime) {
+          // 检查是否超过重复结束日期
+          if (reminder.repeatEndDate && nextReminderTime > reminder.repeatEndDate) {
+            console.log(`重复提醒已达到结束日期，不创建下一次提醒`);
+          } else {
+            // 创建下一次提醒
+            await Reminder.create({
+              userId: reminder.userId,
+              chatId: reminder.chatId,
+              message: reminder.message,
+              reminderTime: nextReminderTime,
+              status: 'pending',
+              repeatCount: 0,
+              categoryId: reminder.categoryId,
+              priority: reminder.priority,
+              tags: reminder.tags,
+              notes: reminder.notes,
+              repeatPattern: reminder.repeatPattern,
+              repeatEndDate: reminder.repeatEndDate
+            });
+            
+            nextReminderCreated = true;
+            console.log(`已创建下一次重复提醒: ${nextReminderTime.toLocaleString('zh-CN')}`);
+          }
+        }
+      }
+
       // 删除原提醒
       await reminder.destroy();
 
-      return true;
+      return {
+        success: true,
+        hasNext: nextReminderCreated,
+        nextTime: nextReminderTime,
+        repeatPattern: reminder.repeatPattern
+      };
     } catch (error) {
       console.error('完成提醒失败:', error);
       throw error;
@@ -466,7 +506,11 @@ class ReminderService {
       });
 
       for (const reminder of expiredReminders) {
-        await this.completeReminder(reminder.id, 'expired');
+        try {
+          await this.completeReminder(reminder.id, 'expired');
+        } catch (error) {
+          console.error(`处理过期提醒失败 (ID: ${reminder.id}):`, error);
+        }
       }
 
       console.log(`清理了 ${expiredReminders.length} 个过期提醒`);
@@ -486,6 +530,33 @@ class ReminderService {
       return { deletedCount };
     } catch (error) {
       console.error('清理已完成提醒失败:', error);
+      throw error;
+    }
+  }
+
+  // 新增：清理达到最大发送次数的提醒
+  async cleanupMaxSentReminders() {
+    try {
+      const maxSentReminders = await Reminder.findAll({
+        where: {
+          status: 'pending',
+          sentCount: {
+            [Sequelize.Op.gte]: Sequelize.col('maxSentCount')
+          }
+        }
+      });
+
+      for (const reminder of maxSentReminders) {
+        // 将达到最大发送次数的提醒标记为过期
+        await this.completeReminder(reminder.id, 'max_sent_reached');
+      }
+
+      if (maxSentReminders.length > 0) {
+        console.log(`清理了 ${maxSentReminders.length} 个达到最大发送次数的提醒`);
+      }
+      return maxSentReminders.length;
+    } catch (error) {
+      console.error('清理达到最大发送次数的提醒失败:', error);
       throw error;
     }
   }
@@ -785,15 +856,32 @@ class ReminderService {
     }
   }
 
-  // 新增：获取到期提醒
+  // 新增：获取到期提醒（包含重复提醒逻辑）
   async getDueReminders() {
     try {
       const now = new Date();
+      const oneMinuteAgo = new Date(now.getTime() - 60 * 1000); // 1分钟前
+      
       const reminders = await Reminder.findAll({
         where: {
           [Sequelize.Op.or]: [
-            { reminderTime: { [Sequelize.Op.lte]: now }, status: 'pending' },
-            { snoozeUntil: { [Sequelize.Op.lte]: now }, status: 'snoozed' }
+            // 首次提醒：到达提醒时间且未发送过
+            {
+              reminderTime: { [Sequelize.Op.lte]: now },
+              status: 'pending',
+              lastSentAt: null
+            },
+            // 重复提醒：距离上次发送超过1分钟且未达到最大发送次数
+            {
+              lastSentAt: { [Sequelize.Op.lte]: oneMinuteAgo },
+              status: 'pending',
+              sentCount: { [Sequelize.Op.lt]: Sequelize.col('maxSentCount') }
+            },
+            // 小睡提醒：到达小睡时间
+            {
+              snoozeUntil: { [Sequelize.Op.lte]: now },
+              status: 'snoozed'
+            }
           ]
         },
         include: [
@@ -812,13 +900,20 @@ class ReminderService {
     }
   }
 
-  // 新增：记录提醒已发送（增加 repeatCount，保留状态以便继续提醒机制扩展）
+  // 记录提醒已发送（包含重复提醒逻辑）
   async recordReminderSent(reminderId) {
     try {
       const reminder = await Reminder.findByPk(reminderId);
       if (!reminder) return false;
-      await reminder.update({ repeatCount: (reminder.repeatCount || 0) + 1 });
-      // 可选：写入历史表
+      
+      // 更新发送状态
+      await reminder.update({
+        lastSentAt: new Date(),
+        sentCount: (reminder.sentCount || 0) + 1,
+        repeatCount: (reminder.repeatCount || 0) + 1
+      });
+      
+      // 写入历史表
       await ReminderHistory.create({
         reminderId: reminder.id,
         userId: reminder.userId,
@@ -831,6 +926,8 @@ class ReminderService {
         priority: reminder.priority,
         tags: reminder.tags
       });
+      
+      console.log(`提醒已发送 (ID: ${reminderId}, 第${reminder.sentCount}次)`);
       return true;
     } catch (error) {
       console.error('记录提醒发送失败:', error);

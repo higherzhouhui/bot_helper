@@ -300,6 +300,58 @@ function validateTimeInput(timeInput) {
   return timePatterns.some(pattern => pattern.test(timeInput));
 }
 
+// 计算下一次重复提醒的时间
+function calculateNextReminderTime(currentTime, repeatPattern) {
+  if (!repeatPattern || repeatPattern === 'none') {
+    return null;
+  }
+
+  const nextTime = new Date(currentTime);
+  
+  switch (repeatPattern) {
+    case 'daily':
+      // 每天：加1天，保持相同的时分秒
+      nextTime.setDate(nextTime.getDate() + 1);
+      break;
+    
+    case 'weekly':
+      // 每周：加7天，保持相同的时分秒
+      nextTime.setDate(nextTime.getDate() + 7);
+      break;
+    
+    case 'monthly':
+      // 每月：加1个月，保持相同的日期和时分秒
+      nextTime.setMonth(nextTime.getMonth() + 1);
+      break;
+    
+    case 'yearly':
+      // 每年：加1年，保持相同的月日和时分秒
+      nextTime.setFullYear(nextTime.getFullYear() + 1);
+      break;
+    
+    case 'workdays':
+      // 工作日：跳到下一个工作日，保持相同的时分秒
+      nextTime.setDate(nextTime.getDate() + 1);
+      while (!isWorkday(nextTime)) {
+        nextTime.setDate(nextTime.getDate() + 1);
+      }
+      break;
+    
+    case 'weekends':
+      // 周末：跳到下一个周末，保持相同的时分秒
+      nextTime.setDate(nextTime.getDate() + 1);
+      while (!isWeekend(nextTime)) {
+        nextTime.setDate(nextTime.getDate() + 1);
+      }
+      break;
+    
+    default:
+      return null;
+  }
+  
+  return nextTime;
+}
+
 module.exports = {
   parseNaturalTime,
   formatTimeDisplay,
@@ -313,5 +365,6 @@ module.exports = {
   isToday,
   isTomorrow,
   getRelativeTimeDescription,
-  validateTimeInput
+  validateTimeInput,
+  calculateNextReminderTime
 }; 
