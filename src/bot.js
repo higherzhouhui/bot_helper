@@ -1,5 +1,6 @@
 // 优化后的主入口文件
 const TelegramBot = require('node-telegram-bot-api');
+const cron = require('node-cron');
 const { config, validateConfig } = require('./config');
 const ReminderHandler = require('./handlers/reminderHandler');
 const NewsHandler = require('./handlers/newsHandler');
@@ -30,6 +31,9 @@ class TelegramReminderBot {
     
     // 定时器管理
     this.intervals = [];
+    
+    // Cron任务管理
+    this.cronTasks = [];
     
     // 设置全局错误处理器
     this.errorHandler.setupGlobalErrorHandlers();
@@ -686,8 +690,8 @@ class TelegramReminderBot {
     
     this.intervals.push(web3Interval);
 
-    // 个性化简报：每分钟检查一次，匹配 HH:mm（维持 60s 间隔）
-    const briefInterval = setInterval(async () => {
+    // 个性化简报：使用 cron 每分钟执行一次
+    const briefTask = cron.schedule('* * * * *', async () => {
       try {
         const now = new Date();
         const pad = (n) => (n < 10 ? '0' + n : '' + n);
@@ -708,9 +712,60 @@ class TelegramReminderBot {
       } catch (e) {
         console.error('发送个性化简报失败:', e.message || e);
       }
-    }, 60 * 1000);
+    }, {
+      scheduled: true,
+      timezone: config.TIMEZONE
+    });
     
-    this.intervals.push(briefInterval);
+    this.cronTasks.push(briefTask);
+    console.log('📰 个性化简报定时任务已启动（每分钟执行）');
+
+    // 数据清理：每天凌晨2点执行
+    const cleanupTask = cron.schedule('0 2 * * *', async () => {
+      try {
+        console.log('🧹 开始执行定期数据清理任务...');
+        const result = await reminderService.performDataCleanup();
+        console.log('✅ 数据清理任务完成:', result);
+      } catch (error) {
+        console.error('❌ 数据清理任务失败:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: config.TIMEZONE
+    });
+    
+    this.cronTasks.push(cleanupTask);
+    console.log('🧹 数据清理定时任务已启动（每天凌晨2点执行）');
+
+    // 统计报告：每天上午9点生成
+    const reportTask = cron.schedule('0 9 * * *', async () => {
+      try {
+        console.log('📊 开始生成每日统计报告...');
+        const report = await reminderService.generateDailyReport();
+        
+        // 如果有管理员用户，发送报告
+        if (config.ADMIN_USER_IDS && config.ADMIN_USER_IDS.length > 0) {
+          const reportMessage = this.formatDailyReport(report);
+          for (const adminId of config.ADMIN_USER_IDS) {
+            try {
+              await this.bot.sendMessage(adminId, reportMessage, { parse_mode: 'HTML' });
+            } catch (error) {
+              console.error(`发送统计报告给管理员 ${adminId} 失败:`, error);
+            }
+          }
+        }
+        
+        console.log('✅ 统计报告任务完成');
+      } catch (error) {
+        console.error('❌ 统计报告任务失败:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: config.TIMEZONE
+    });
+    
+    this.cronTasks.push(reportTask);
+    console.log('📊 统计报告定时任务已启动（每天上午9点执行）');
 
     console.log('🔄 定时任务已启动');
   }
@@ -734,6 +789,31 @@ class TelegramReminderBot {
     console.log('🏥 数据库健康检查已启动');
   }
 
+  // 格式化每日统计报告
+  formatDailyReport(report) {
+    const { yesterday, today, summary } = report;
+    
+    return `📊 <b>每日统计报告</b> - ${report.date}
+
+📈 <b>今日数据</b>
+• 新增提醒: ${today.created}
+• 完成提醒: ${today.completed}
+• 活跃提醒: ${today.reminders}
+
+📉 <b>昨日数据</b>
+• 新增提醒: ${yesterday.created}
+• 完成提醒: ${yesterday.completed}
+• 活跃提醒: ${yesterday.reminders}
+
+🏆 <b>系统总览</b>
+• 总用户数: ${summary.totalUsers}
+• 总提醒数: ${summary.totalReminders}
+• 总分类数: ${summary.totalCategories}
+• 活跃用户: ${summary.activeUsers}
+
+⏰ 报告生成时间: ${new Date().toLocaleString('zh-CN')}`;
+  }
+
   // 清理所有定时器
   clearAllIntervals() {
     this.intervals.forEach(clearInterval);
@@ -741,10 +821,18 @@ class TelegramReminderBot {
     console.log('🧹 已清理所有定时器');
   }
 
+  // 清理所有Cron任务
+  clearAllCronTasks() {
+    this.cronTasks.forEach(task => task.stop());
+    this.cronTasks = [];
+    console.log('🧹 已清理所有Cron任务');
+  }
+
   // 停止机器人
   stop() {
     console.log('🛑 正在停止机器人...');
     this.clearAllIntervals();
+    this.clearAllCronTasks();
     this.bot.stopPolling();
     console.log('✅ 机器人已停止');
   }

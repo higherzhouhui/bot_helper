@@ -561,6 +561,82 @@ class ReminderService {
     }
   }
 
+  // 新增：定期数据清理任务
+  async performDataCleanup() {
+    try {
+      console.log('🧹 开始执行定期数据清理...');
+      
+      // 1. 清理过期的提醒
+      const expiredCount = await this.cleanupExpiredReminders();
+      
+      // 2. 清理达到最大发送次数的提醒
+      const maxSentCount = await this.cleanupMaxSentReminders();
+      
+      // 3. 清理过期的新闻数据（如果新闻服务支持）
+      let newsCleanupCount = 0;
+      try {
+        const { cleanupExpiredNews } = require('./newsService');
+        if (cleanupExpiredNews) {
+          newsCleanupCount = await cleanupExpiredNews();
+        }
+      } catch (error) {
+        console.log('新闻清理服务不可用，跳过');
+      }
+      
+      // 4. 清理过期的用户设置和偏好
+      const userCleanupCount = await this.cleanupExpiredUserData();
+      
+      const totalCleaned = expiredCount + maxSentCount + newsCleanupCount + userCleanupCount;
+      console.log(`🧹 数据清理完成，共清理 ${totalCleaned} 条过期数据`);
+      
+      return {
+        expiredReminders: expiredCount,
+        maxSentReminders: maxSentCount,
+        expiredNews: newsCleanupCount,
+        expiredUserData: userCleanupCount,
+        total: totalCleaned
+      };
+    } catch (error) {
+      console.error('定期数据清理失败:', error);
+      throw error;
+    }
+  }
+
+  // 新增：清理过期的用户数据
+  async cleanupExpiredUserData() {
+    try {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      // 清理30天未活动的用户设置
+      const deletedSettings = await sequelize.models.UserSetting.destroy({
+        where: {
+          updatedAt: {
+            [Sequelize.Op.lt]: thirtyDaysAgo
+          }
+        }
+      });
+      
+      // 清理30天未活动的用户偏好
+      const deletedPreferences = await sequelize.models.UserNewsPreference.destroy({
+        where: {
+          updatedAt: {
+            [Sequelize.Op.lt]: thirtyDaysAgo
+          }
+        }
+      });
+      
+      if (deletedSettings > 0 || deletedPreferences > 0) {
+        console.log(`清理了 ${deletedSettings} 条过期用户设置，${deletedPreferences} 条过期用户偏好`);
+      }
+      
+      return deletedSettings + deletedPreferences;
+    } catch (error) {
+      console.error('清理过期用户数据失败:', error);
+      return 0;
+    }
+  }
+
   // 获取统计信息
   async getStats(userId) {
     try {
@@ -808,6 +884,76 @@ class ReminderService {
     } catch (error) {
       console.error('获取优先级分布统计失败:', error);
       throw error;
+    }
+  }
+
+  // 新增：生成每日统计报告
+  async generateDailyReport() {
+    try {
+      console.log('📊 开始生成每日统计报告...');
+      
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      // 获取昨日数据
+      const yesterdayStats = await this.getStatsForDateRange(yesterday, now);
+      
+      // 获取今日数据
+      const todayStats = await this.getStatsForDateRange(now, new Date(now.getTime() + 24 * 60 * 60 * 1000));
+      
+      // 生成报告
+      const report = {
+        date: now.toISOString().split('T')[0],
+        yesterday: yesterdayStats,
+        today: todayStats,
+        summary: {
+          totalUsers: await this.getUserCount(),
+          totalReminders: await this.getTotalReminderCount(),
+          totalCategories: await this.getTotalCategoryCount(),
+          activeUsers: await this.getActiveUserCount()
+        }
+      };
+      
+      console.log('📊 每日统计报告生成完成');
+      return report;
+    } catch (error) {
+      console.error('生成每日统计报告失败:', error);
+      throw error;
+    }
+  }
+
+  // 新增：获取指定日期范围的统计
+  async getStatsForDateRange(startDate, endDate) {
+    try {
+      const [reminders, completed, created] = await Promise.all([
+        Reminder.count({
+          where: {
+            createdAt: {
+              [Sequelize.Op.between]: [startDate, endDate]
+            }
+          }
+        }),
+        ReminderHistory.count({
+          where: {
+            actionType: 'completed',
+            completedAt: {
+              [Sequelize.Op.between]: [startDate, endDate]
+            }
+          }
+        }),
+        Reminder.count({
+          where: {
+            createdAt: {
+              [Sequelize.Op.between]: [startDate, endDate]
+            }
+          }
+        })
+      ]);
+      
+      return { reminders, completed, created };
+    } catch (error) {
+      console.error('获取日期范围统计失败:', error);
+      return { reminders: 0, completed: 0, created: 0 };
     }
   }
 
