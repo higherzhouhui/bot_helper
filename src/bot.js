@@ -166,6 +166,15 @@ class TelegramReminderBot {
       }
     });
 
+    // 处理 /setup_categories 命令
+    this.bot.onText(/\/setup_categories/, async (msg) => {
+      try {
+        await this.commandHandler.handleSetupCategoriesCommand(msg);
+      } catch (error) {
+        await this.errorHandler.handleError(error, msg.chat.id, 'setup_categories_command');
+      }
+    });
+
     // 处理普通消息
     this.bot.on('message', async (msg) => {
       try {
@@ -597,9 +606,11 @@ class TelegramReminderBot {
       
       // 如果是重复提醒，显示次数信息
       if (reminder.sentCount && reminder.sentCount > 0) {
-        const remainingCount = (reminder.maxSentCount || 5) - reminder.sentCount;
+        const currentSendNumber = reminder.sentCount + 1; // 当前是第几次发送
+        const remainingCount = Math.max(0, (reminder.maxSentCount || 5) - currentSendNumber);
+        
         if (remainingCount > 0) {
-          message += `\n🔄 第${reminder.sentCount + 1}次提醒 (还剩${remainingCount}次)`;
+          message += `\n🔄 第${currentSendNumber}次提醒 (还剩${remainingCount}次)`;
         } else {
           message += `\n⚠️ 最后一次提醒`;
         }

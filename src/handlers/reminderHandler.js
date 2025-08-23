@@ -206,6 +206,13 @@ class ReminderHandler {
       }
 
       const categories = await reminderService.getUserCategories(userId);
+      
+      if (categories.length === 0) {
+        await this.bot.sendMessage(chatId, `❌ 无法获取分类信息\n\n💬 提醒内容：${reminder.message}\n🏷️ 当前分类：${reminder.category ? reminder.category.name : '无'}\n\n请稍后重试或联系管理员。`);
+        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 分类获取失败');
+        return;
+      }
+      
       const keyboard = {
         inline_keyboard: [
           ...categories.map(cat => [{

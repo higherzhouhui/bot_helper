@@ -22,7 +22,7 @@ class CommandHandler {
       // 创建或获取用户
       await reminderService.createOrUpdateUser(msg.from);
       
-      const welcomeMessage = `🎉 欢迎使用智能提醒助手！\n\n📋 主要功能：\n• ⏰ 智能提醒：支持自然语言输入\n• 🏷️ 分类管理：工作、生活、学习等\n• ⭐ 优先级：紧急、重要、普通、低\n• 🔄 重复提醒：每天、每周、每月等\n• 📰 新闻资讯：最新热点新闻\n• 🕸️ Web3 资讯：ChainFeeds/PANews/Investing\n\n💡 使用示例：\n• "今晚20点提醒我开会"\n• "明天上午9点重要提醒：提交报告"\n• "每天提醒我喝水"\n\n🔧 常用命令：\n/start - 开始使用\n/help - 查看帮助\n/reminders - 查看提醒\n/news - 最新新闻\n/web3 - Web3 区块链资讯\n/brief - 生成个性化简报\n/subscribe 关键词 - 订阅关键词\n/favorites - 查看收藏\n/quiet HH:MM HH:MM - 设置安静时段\n/stats - 统计信息`;
+      const welcomeMessage = `🎉 欢迎使用智能提醒助手！\n\n📋 主要功能：\n• ⏰ 智能提醒：支持自然语言输入\n• 🏷️ 分类管理：工作、生活、学习等\n• ⭐ 优先级：紧急、重要、普通、低\n• 🔄 重复提醒：每天、每周、每月等\n• 📰 新闻资讯：最新热点新闻\n• 🕸️ Web3 资讯：ChainFeeds/PANews/Investing\n\n💡 使用示例：\n• "今晚20点提醒我开会"\n• "明天上午9点重要提醒：提交报告"\n• "每天提醒我喝水"\n\n🔧 常用命令：\n/start - 开始使用\n/help - 查看帮助\n/reminders - 查看提醒\n/news - 最新新闻\n/web3 - Web3 区块链资讯\n/brief - 生成个性化简报\n/subscribe 关键词 - 订阅关键词\n/favorites - 查看收藏\n/quiet HH:MM HH:MM - 设置安静时段\n/stats - 统计信息\n/setup_categories - 设置默认分类`;
 
       const keyboard = {
         inline_keyboard: [
@@ -113,6 +113,39 @@ class CommandHandler {
     } catch (error) {
       console.error('获取提醒列表失败:', error);
       await this.bot.sendMessage(chatId, '❌ 获取提醒列表失败，请重试');
+    }
+  }
+
+  // 处理设置默认分类命令
+  async handleSetupCategoriesCommand(msg) {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    try {
+      // 强制创建默认分类
+      await reminderService.createDefaultCategories(userId);
+      
+      // 获取用户分类
+      const categories = await reminderService.getUserCategories(userId);
+      
+      const message = `✅ 默认分类设置完成！\n\n🏷️ 您的分类列表：\n${categories.map(cat => `• ${cat.icon} ${cat.name}`).join('\n')}\n\n💡 现在您可以：\n• 创建提醒时选择分类\n• 按分类查看提醒\n• 自定义分类图标和颜色`;
+      
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '⏰ 创建提醒', callback_data: 'create_reminder' },
+            { text: '📋 我的提醒', callback_data: 'my_reminders' }
+          ],
+          [
+            { text: '🔙 返回主菜单', callback_data: 'back_to_main' }
+          ]
+        ]
+      };
+      
+      await this.bot.sendMessage(chatId, message, { reply_markup: keyboard });
+    } catch (error) {
+      console.error('设置默认分类失败:', error);
+      await this.bot.sendMessage(chatId, '❌ 设置默认分类失败，请重试');
     }
   }
 

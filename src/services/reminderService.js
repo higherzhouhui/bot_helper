@@ -40,21 +40,36 @@ class ReminderService {
 
   // 创建默认分类
   async createDefaultCategories(userId) {
-    const defaultCategories = [
-      { name: '工作', icon: '💼', color: '#FF6B6B' },
-      { name: '生活', icon: '🏠', color: '#4ECDC4' },
-      { name: '学习', icon: '📚', color: '#45B7D1' },
-      { name: '健康', icon: '💪', color: '#96CEB4' },
-      { name: '娱乐', icon: '🎮', color: '#FFEAA7' }
-    ];
+    try {
+      const defaultCategories = [
+        { name: '工作', icon: '💼', color: '#FF6B6B' },
+        { name: '生活', icon: '🏠', color: '#4ECDC4' },
+        { name: '学习', icon: '📚', color: '#45B7D1' },
+        { name: '健康', icon: '💪', color: '#96CEB4' },
+        { name: '娱乐', icon: '🎮', color: '#FFEAA7' }
+      ];
 
-    for (const category of defaultCategories) {
-      await Category.create({
-        userId,
-        name: category.name,
-        icon: category.icon,
-        color: category.color
-      });
+      // 检查是否已存在默认分类，避免重复创建
+      for (const category of defaultCategories) {
+        const existingCategory = await Category.findOne({
+          where: { userId, name: category.name }
+        });
+        
+        if (!existingCategory) {
+          await Category.create({
+            userId,
+            name: category.name,
+            icon: category.icon,
+            color: category.color
+          });
+          console.log(`为用户 ${userId} 创建分类: ${category.name}`);
+        }
+      }
+      
+      console.log(`用户 ${userId} 的默认分类检查/创建完成`);
+    } catch (error) {
+      console.error(`为用户 ${userId} 创建默认分类失败:`, error);
+      throw error;
     }
   }
 
@@ -78,15 +93,38 @@ class ReminderService {
   // 获取用户分类
   async getUserCategories(userId) {
     try {
-      const categories = await Category.findAll({
+      let categories = await Category.findAll({
         where: { userId },
         order: [['name', 'ASC']]
       });
 
+      // 如果用户没有分类，自动创建默认分类
+      if (categories.length === 0) {
+        console.log(`用户 ${userId} 没有分类，正在创建默认分类...`);
+        await this.createDefaultCategories(userId);
+        categories = await Category.findAll({
+          where: { userId },
+          order: [['name', 'ASC']]
+        });
+        console.log(`已为用户 ${userId} 创建 ${categories.length} 个默认分类`);
+      }
+
       return categories;
     } catch (error) {
       console.error('获取用户分类失败:', error);
-      throw error;
+      // 如果出错，尝试创建默认分类
+      try {
+        console.log(`尝试为用户 ${userId} 创建默认分类...`);
+        await this.createDefaultCategories(userId);
+        const categories = await Category.findAll({
+          where: { userId },
+          order: [['name', 'ASC']]
+        });
+        return categories;
+      } catch (fallbackError) {
+        console.error('创建默认分类失败:', fallbackError);
+        throw error;
+      }
     }
   }
 
@@ -136,7 +174,10 @@ class ReminderService {
         tags: reminderData.tags || [],
         notes: reminderData.notes ? reminderData.notes.trim() : null,
         repeatPattern: reminderData.repeatPattern || 'none',
-        repeatEndDate: reminderData.repeatEndDate || null
+        repeatEndDate: reminderData.repeatEndDate || null,
+        maxSentCount: reminderData.maxSentCount || 5,
+        sentCount: 0,
+        lastSentAt: null
       });
 
       console.log(`提醒已保存到数据库: ID=${reminder.id}`);
@@ -1077,10 +1118,13 @@ class ReminderService {
       const reminder = await Reminder.findByPk(reminderId);
       if (!reminder) return false;
       
+      const newSentCount = (reminder.sentCount || 0) + 1;
+      const maxSentCount = reminder.maxSentCount || 5;
+      
       // 更新发送状态
       await reminder.update({
         lastSentAt: new Date(),
-        sentCount: (reminder.sentCount || 0) + 1,
+        sentCount: newSentCount,
         repeatCount: (reminder.repeatCount || 0) + 1
       });
       
@@ -1098,7 +1142,16 @@ class ReminderService {
         tags: reminder.tags
       });
       
-      console.log(`提醒已发送 (ID: ${reminderId}, 第${reminder.sentCount}次)`);
+      console.log(`提醒已发送 (ID: ${reminderId}, 第${newSentCount}次)`);
+      
+      // 如果达到最大发送次数，标记为已完成
+      if (newSentCount >= maxSentCount) {
+        await reminder.update({
+          status: 'max_sent_reached'
+        });
+        console.log(`提醒 ${reminderId} 已达到最大发送次数 (${maxSentCount}次)，标记为已完成`);
+      }
+      
       return true;
     } catch (error) {
       console.error('记录提醒发送失败:', error);

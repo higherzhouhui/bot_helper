@@ -7,6 +7,7 @@
     "start": "NODE_ENV=production node src/bot.js",
     "dev": "set NODE_ENV=development && nodemon src/bot.js",
     "init-db": "node src/init-db.js",
+    "setup-categories": "node src/scripts/setupDefaultCategories.js",
     "crawl-news": "node src/scripts/crawlNews.js",
     "build": "set NODE_ENV=production esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js",
     "build:win": "esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js",
