@@ -104,17 +104,37 @@ class ReminderService {
   // 创建提醒
   async createReminder(reminderData) {
     try {
+      // 输入验证
+      if (!reminderData.userId || !reminderData.chatId || !reminderData.message || !reminderData.reminderTime) {
+        throw new Error('缺少必需的提醒数据');
+      }
+      
+      // 消息长度限制
+      if (reminderData.message.length > 1000) {
+        throw new Error('提醒消息不能超过1000个字符');
+      }
+      
+      // 时间验证
+      if (reminderData.reminderTime <= new Date()) {
+        throw new Error('提醒时间不能是过去的时间');
+      }
+      
+      // 标签数量限制
+      if (reminderData.tags && reminderData.tags.length > 10) {
+        throw new Error('标签数量不能超过10个');
+      }
+      
       const reminder = await Reminder.create({
         userId: reminderData.userId,
         chatId: reminderData.chatId,
-        message: reminderData.message,
+        message: reminderData.message.trim(),
         reminderTime: reminderData.reminderTime,
         status: 'pending',
         repeatCount: 0,
         categoryId: reminderData.categoryId || null,
         priority: reminderData.priority || 'normal',
         tags: reminderData.tags || [],
-        notes: reminderData.notes || null,
+        notes: reminderData.notes ? reminderData.notes.trim() : null,
         repeatPattern: reminderData.repeatPattern || 'none',
         repeatEndDate: reminderData.repeatEndDate || null
       });
@@ -1082,6 +1102,16 @@ class ReminderService {
       return true;
     } catch (error) {
       console.error('记录提醒发送失败:', error);
+      // 如果更新失败，尝试回滚发送计数
+      try {
+        if (reminder) {
+          await reminder.update({
+            sentCount: Math.max(0, (reminder.sentCount || 1) - 1)
+          });
+        }
+      } catch (rollbackError) {
+        console.error('回滚发送计数失败:', rollbackError);
+      }
       return false;
     }
   }

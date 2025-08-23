@@ -583,7 +583,17 @@ class TelegramReminderBot {
       const chatId = reminder.chatId;
       
       // 构建提醒消息
-      let message = `⏰ 提醒时间到！\n\n💬 ${reminder.message}\n📅 ${reminder.reminderTime.toLocaleString('zh-CN')}`;
+      let message = `⏰ <b>提醒时间到！</b>\n\n💬 <b>${reminder.message}</b>\n📅 ${reminder.reminderTime.toLocaleString('zh-CN')}`;
+      
+      // 添加分类和优先级信息
+      if (reminder.category && reminder.category.name) {
+        message += `\n🏷️ ${reminder.category.name}`;
+      }
+      
+      if (reminder.priority && reminder.priority !== 'normal') {
+        const priorityEmoji = this.getPriorityEmoji(reminder.priority);
+        message += `\n⭐ ${priorityEmoji} ${reminder.priority}`;
+      }
       
       // 如果是重复提醒，显示次数信息
       if (reminder.sentCount && reminder.sentCount > 0) {
@@ -593,6 +603,11 @@ class TelegramReminderBot {
         } else {
           message += `\n⚠️ 最后一次提醒`;
         }
+      }
+      
+      // 添加标签信息
+      if (reminder.tags && reminder.tags.length > 0) {
+        message += `\n🏷️ 标签: ${reminder.tags.join(', ')}`;
       }
 
       const keyboard = {
@@ -604,12 +619,16 @@ class TelegramReminderBot {
           [
             { text: '🔔 小睡5分钟', callback_data: `snooze_${reminder.id}` },
             { text: '✏️ 修改', callback_data: `edit_${reminder.id}` }
+          ],
+          [
+            { text: '🗑️ 删除', callback_data: `delete_${reminder.id}` }
           ]
         ]
       };
 
       await this.bot.sendMessage(chatId, message, {
-        reply_markup: keyboard
+        reply_markup: keyboard,
+        parse_mode: 'HTML'
       });
 
       // 记录提醒发送历史

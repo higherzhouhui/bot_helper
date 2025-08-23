@@ -75,6 +75,26 @@ function validateConfig() {
     throw new Error('REMINDER_CHECK_INTERVAL不能小于1秒');
   }
   
+  // 验证时区格式
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: config.TIMEZONE });
+  } catch (error) {
+    throw new Error(`无效的时区设置: ${config.TIMEZONE}`);
+  }
+  
+  // 验证数据库路径
+  if (config.DB_PATH && !path.isAbsolute(config.DB_PATH)) {
+    const dbDir = path.dirname(config.DB_PATH);
+    if (!fs.existsSync(dbDir)) {
+      try {
+        fs.mkdirSync(dbDir, { recursive: true });
+        console.log(`✅ 已创建数据库目录: ${dbDir}`);
+      } catch (mkdirError) {
+        throw new Error(`无法创建数据库目录: ${dbDir}`);
+      }
+    }
+  }
+  
   // 验证管理员ID格式
   if (config.ADMIN_USER_IDS.length > 0) {
     for (const id of config.ADMIN_USER_IDS) {
