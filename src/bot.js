@@ -28,6 +28,9 @@ class TelegramReminderBot {
     this.userEditStates = new Map();
     this.userSearchStates = new Map();
     
+    // 定时器管理
+    this.intervals = [];
+    
     // 设置全局错误处理器
     this.errorHandler.setupGlobalErrorHandlers();
     
@@ -42,6 +45,9 @@ class TelegramReminderBot {
     
     // 设置事件处理器
     this.setupEventHandlers();
+    
+    // 启动数据库健康检查
+    this.startDatabaseHealthCheck();
     
     console.log('🤖 智能提醒机器人已启动');
   }
@@ -536,12 +542,21 @@ class TelegramReminderBot {
   // 初始化提醒定时器
   async initReminderTimer() {
     try {
+      // 清理现有定时器
+      this.clearAllIntervals();
+      
       // 每10秒检查一次提醒
-      setInterval(async () => {
+      const reminderInterval = setInterval(async () => {
         try {
           const dueReminders = await reminderService.getDueReminders();
           for (const reminder of dueReminders) {
-            await this.sendReminder(reminder);
+            try {
+              await this.sendReminder(reminder);
+            } catch (error) {
+              console.error(`发送提醒失败 (ID: ${reminder.id}):`, error);
+              // 继续处理下一个提醒
+              continue;
+            }
           }
           
           // 清理达到最大发送次数的提醒
@@ -551,6 +566,7 @@ class TelegramReminderBot {
         }
       }, 10 * 1000); // 固定为10秒
 
+      this.intervals.push(reminderInterval);
       console.log('⏰ 提醒定时器已启动（每10秒检查一次）');
     } catch (error) {
       console.error('启动提醒定时器失败:', error);
@@ -631,7 +647,7 @@ class TelegramReminderBot {
       }
     })();
 
-    setInterval(async () => {
+    const newsInterval = setInterval(async () => {
       try {
         const t = newsTasks[newsIdx % newsTasks.length];
         newsIdx++;
@@ -640,6 +656,8 @@ class TelegramReminderBot {
         console.error('新闻爬取任务失败:', error.message || error);
       }
     }, config.NEWS_CRAWL_INTERVAL);
+    
+    this.intervals.push(newsInterval);
 
     // Web3 轮询
     const web3Tasks = ['chainfeeds', 'panews', 'investing_cn'];
@@ -656,7 +674,7 @@ class TelegramReminderBot {
       }
     })();
 
-    setInterval(async () => {
+    const web3Interval = setInterval(async () => {
       try {
         const src = web3Tasks[widx % web3Tasks.length];
         widx++;
@@ -665,31 +683,68 @@ class TelegramReminderBot {
         console.error('Web3 爬取任务失败:', error.message || error);
       }
     }, Math.max(60000, Math.floor(config.NEWS_CRAWL_INTERVAL / 2)));
+    
+    this.intervals.push(web3Interval);
 
     // 个性化简报：每分钟检查一次，匹配 HH:mm（维持 60s 间隔）
-    setInterval(async () => {
+    const briefInterval = setInterval(async () => {
       try {
         const now = new Date();
         const pad = (n) => (n < 10 ? '0' + n : '' + n);
         const hhmm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
         const userIds = await userService.getUsersToBriefAt(hhmm);
         for (const uid of userIds) {
-          const inQuiet = await userService.isInQuietHours(uid, now);
-          if (inQuiet) continue;
-          const brief = await newsService.getPersonalizedBrief(uid, 8);
-          await this.bot.sendMessage(uid, brief, { parse_mode: 'HTML', disable_web_page_preview: true });
+          try {
+            const inQuiet = await userService.isInQuietHours(uid, now);
+            if (inQuiet) continue;
+            const brief = await newsService.getPersonalizedBrief(uid, 8);
+            await this.bot.sendMessage(uid, brief, { parse_mode: 'HTML', disable_web_page_preview: true });
+          } catch (error) {
+            console.error(`发送个性化简报失败 (用户ID: ${uid}):`, error.message || error);
+            // 继续处理下一个用户
+            continue;
+          }
         }
       } catch (e) {
         console.error('发送个性化简报失败:', e.message || e);
       }
     }, 60 * 1000);
+    
+    this.intervals.push(briefInterval);
 
     console.log('🔄 定时任务已启动');
+  }
+
+  // 启动数据库健康检查
+  startDatabaseHealthCheck() {
+    const healthCheckInterval = setInterval(async () => {
+      try {
+        const { testConnection } = require('./models');
+        const isHealthy = await testConnection();
+        if (!isHealthy) {
+          console.warn('⚠️ 数据库连接异常，尝试重连...');
+          // 这里可以添加重连逻辑
+        }
+      } catch (error) {
+        console.error('数据库健康检查失败:', error);
+      }
+    }, 300000); // 每5分钟检查一次
+    
+    this.intervals.push(healthCheckInterval);
+    console.log('🏥 数据库健康检查已启动');
+  }
+
+  // 清理所有定时器
+  clearAllIntervals() {
+    this.intervals.forEach(clearInterval);
+    this.intervals = [];
+    console.log('🧹 已清理所有定时器');
   }
 
   // 停止机器人
   stop() {
     console.log('🛑 正在停止机器人...');
+    this.clearAllIntervals();
     this.bot.stopPolling();
     console.log('✅ 机器人已停止');
   }

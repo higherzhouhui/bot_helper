@@ -60,6 +60,29 @@ function validateConfig() {
   if (missing.length > 0) {
     throw new Error(`缺少必需的环境变量: ${missing.join(', ')}`);
   }
+  
+  // 验证BOT_TOKEN格式
+  if (!config.BOT_TOKEN.match(/^\d+:[A-Za-z0-9_-]+$/)) {
+    throw new Error('BOT_TOKEN格式不正确，应为 "数字:字符串" 格式');
+  }
+  
+  // 验证配置值的有效性
+  if (config.NEWS_CRAWL_INTERVAL < 60000) {
+    throw new Error('NEWS_CRAWL_INTERVAL不能小于60秒');
+  }
+  
+  if (config.REMINDER_CHECK_INTERVAL < 1000) {
+    throw new Error('REMINDER_CHECK_INTERVAL不能小于1秒');
+  }
+  
+  // 验证管理员ID格式
+  if (config.ADMIN_USER_IDS.length > 0) {
+    for (const id of config.ADMIN_USER_IDS) {
+      if (!Number.isInteger(id) || id <= 0) {
+        throw new Error('ADMIN_USER_IDS必须包含有效的正整数');
+      }
+    }
+  }
 }
 
 // 输出配置信息（开发环境）
