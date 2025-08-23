@@ -6,7 +6,7 @@
   "scripts": {
     "start": "NODE_ENV=production node src/bot.js",
     "dev": "set NODE_ENV=development && nodemon src/bot.js",
-    "init": "set NODE_ENV=production && node src/init-db.js",
+    "init": "NODE_ENV=production node src/init-db.js",
     "init-db": "node src/init-db.js",
     "setup-categories": "node src/scripts/setupDefaultCategories.js",
     "crawl-news": "node src/scripts/crawlNews.js",
