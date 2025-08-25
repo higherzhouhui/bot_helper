@@ -11,6 +11,8 @@ async function crawlAllNews() {
     await newsService.crawlNews('sina', 'sports', 10);
     await newsService.crawlNews('sina', 'ent', 10);
     await newsService.crawlNews('sina', 'world', 10);
+    await newsService.crawlNews('sina', 'society', 10);
+    await newsService.crawlNews('sina', 'health', 10);
     
     // 爬取网易新闻
     console.log('\n📰 爬取网易新闻...');
@@ -19,6 +21,8 @@ async function crawlAllNews() {
     await newsService.crawlNews('163', 'sports', 10);
     await newsService.crawlNews('163', 'ent', 10);
     await newsService.crawlNews('163', 'world', 10);
+    await newsService.crawlNews('163', 'society', 10);
+    await newsService.crawlNews('163', 'health', 10);
     
     // 爬取搜狐新闻
     console.log('\n📰 爬取搜狐新闻...');
@@ -27,6 +31,8 @@ async function crawlAllNews() {
     await newsService.crawlNews('sohu', 'sports', 10);
     await newsService.crawlNews('sohu', 'yule', 10);
     await newsService.crawlNews('sohu', 'world', 10);
+    await newsService.crawlNews('sohu', 'society', 10);
+    await newsService.crawlNews('sohu', 'health', 10);
     
     console.log('\n✅ 所有新闻爬取完成！');
     

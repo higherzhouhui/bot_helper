@@ -16,7 +16,9 @@ class NewsService {
           'finance': { siteKey: 'finance', url: '/finance/', fullUrl: 'https://finance.sina.com.cn/' },
           'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.sina.com.cn/' },
           'ent': { siteKey: 'ent', url: '/ent/', fullUrl: 'https://ent.sina.com.cn/' },
-          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sina.com.cn/world/' }
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sina.com.cn/world/' },
+          'society': { siteKey: 'society', url: '/society/', fullUrl: 'https://news.sina.com.cn/society/' },
+          'health': { siteKey: 'health', url: '/health/', fullUrl: 'https://health.sina.com.cn/' }
         }
       },
       '163': {
@@ -27,7 +29,9 @@ class NewsService {
           'finance': { siteKey: 'money', url: '/money/', fullUrl: 'https://money.163.com/' },
           'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.163.com/' },
           'ent': { siteKey: 'ent', url: '/ent/', fullUrl: 'https://ent.163.com/' },
-          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.163.com/world/' }
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.163.com/world/' },
+          'society': { siteKey: 'society', url: '/society/', fullUrl: 'https://news.163.com/shehui/' },
+          'health': { siteKey: 'health', url: '/health/', fullUrl: 'https://jiankang.163.com/' }
         }
       },
       'sohu': {
@@ -38,7 +42,9 @@ class NewsService {
           'finance': { siteKey: 'business', url: '/business/', fullUrl: 'https://business.sohu.com/' },
           'sports': { siteKey: 'sports', url: '/sports/', fullUrl: 'https://sports.sohu.com/' },
           'ent': { siteKey: 'yule', url: '/yule/', fullUrl: 'https://yule.sohu.com/' },
-          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sohu.com/guoji.shtml' }
+          'world': { siteKey: 'world', url: '/world/', fullUrl: 'https://news.sohu.com/guoji.shtml' },
+          'society': { siteKey: 'society', url: '/society/', fullUrl: 'https://society.sohu.com/' },
+          'health': { siteKey: 'health', url: '/health/', fullUrl: 'https://health.sohu.com/' }
         }
       }
     };
@@ -392,6 +398,14 @@ class NewsService {
       'world': {
         keywords: ['国际关系', '外交', '贸易', '政治', '经济', '文化', '科技'],
         companies: ['美国', '欧盟', '日本', '韩国', '俄罗斯', '印度']
+      },
+      'society': {
+        keywords: ['教育', '治安', '交通', '公益', '就业', '民生', '环保'],
+        companies: ['社区组织', '志愿者团队', '高校', '公安部门', '市政单位']
+      },
+      'health': {
+        keywords: ['疫苗', '公卫', '医疗', '养生', '营养', '心理健康', '运动健康'],
+        companies: ['三甲医院', '疾控中心', '制药企业', '健康管理机构', '研究所']
       }
     };
 
