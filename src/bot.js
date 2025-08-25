@@ -10,6 +10,7 @@ const reminderService = require('./services/reminderService');
 const newsService = require('./services/newsService');
 const SmartParser = require('./utils/smartParser');
 const userService = require('./services/userService');
+const UserHandler = require('./handlers/userHandler');
 
 class TelegramReminderBot {
   constructor() {
@@ -21,6 +22,7 @@ class TelegramReminderBot {
     this.newsHandler = new NewsHandler(this.bot);
     this.commandHandler = new CommandHandler(this.bot, config);
     this.errorHandler = new ErrorHandler(this.bot);
+    this.userHandler = new UserHandler(this.bot, config);
     
     // 初始化智能解析器
     this.smartParser = new SmartParser();
@@ -360,7 +362,25 @@ class TelegramReminderBot {
       } else if (data.startsWith('delete_')) {
         await this.handleDeleteReminder(callbackQuery);
       } else if (data.startsWith('news_')) {
-        await this.newsHandler.handleNewsCallback(callbackQuery);
+        // 处理具体的新闻回调
+        if (data === 'news_hot') {
+          await this.newsHandler.handleHotNews(callbackQuery);
+        } else if (data === 'news_stats') {
+          await this.newsHandler.handleNewsStats(callbackQuery);
+        } else if (data === 'news_categories') {
+          await this.newsHandler.handleNewsCategories(callbackQuery);
+        } else if (data === 'news_search') {
+          await this.newsHandler.handleNewsSearch(callbackQuery);
+        } else if (data === 'news_back') {
+          await this.newsHandler.handleNewsBack(callbackQuery);
+        } else if (data.startsWith('news_page_')) {
+          // 处理新闻分页
+          const page = parseInt(data.replace('news_page_', ''));
+          await this.newsHandler.handleNewsCommand(callbackQuery.message, page);
+        } else {
+          // 其他news_开头的回调
+          await this.newsHandler.handleNewsCallback(callbackQuery);
+        }
       } else if (data.startsWith('web3_')) {
         await this.newsHandler.handleWeb3Callback(callbackQuery);
       } else if (data === 'create_reminder') {
@@ -373,10 +393,38 @@ class TelegramReminderBot {
         await this.commandHandler.handleSearchReminders(callbackQuery);
       } else if (data === 'cleanup_completed') {
         await this.commandHandler.handleCleanupCompleted(callbackQuery);
+      } else if (data === 'stats') {
+        await this.commandHandler.handleStats(callbackQuery);
+      } else if (data === 'user_settings') {
+        await this.userHandler.handleUserSettings(callbackQuery);
+      } else if (data.startsWith('settings_')) {
+        await this.userHandler.handleSettingsCallback(callbackQuery);
+      } else if (data.startsWith('confirm_')) {
+        await this.handleConfirmAction(callbackQuery);
+      } else if (data.startsWith('cancel_')) {
+        await this.handleCancelAction(callbackQuery);
+      } else if (data === 'news_stats') {
+        await this.newsHandler.handleNewsStats(callbackQuery);
+      } else if (data === 'news_back') {
+        await this.newsHandler.handleNewsBack(callbackQuery);
+      } else if (data.startsWith('category_')) {
+        const categoryId = data.replace('category_', '');
+        await this.newsHandler.handleCategoryNews(callbackQuery.message, categoryId);
+      } else if (data.startsWith('priority_')) {
+        const priority = data.replace('priority_', '');
+        await this.reminderHandler.handlePrioritySelection(callbackQuery, priority);
+      } else if (data.startsWith('search_')) {
+        await this.handleSearchCallback(callbackQuery);
+      } else if (data.startsWith('admin_')) {
+        await this.commandHandler.handleAdminCallback(callbackQuery);
+      } else if (data === 'admin_page_info') {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '管理员页面信息');
+      } else if (data === 'admin_back') {
+        await this.commandHandler.handleAdminBack(callbackQuery);
       } else if (data.startsWith('reminder_')) {
         await this.reminderHandler.handleReminderCallback(callbackQuery);
       } else if (data.startsWith('user_')) {
-        await this.userService.handleUserCallback(callbackQuery);
+        await this.userHandler.handleUserCallback(callbackQuery);
       } else if (data === 'back_to_main') {
         await this.commandHandler.handleMainMenu(callbackQuery.message);
       } else if (data === 'help') {
@@ -527,6 +575,70 @@ class TelegramReminderBot {
       }
     } catch (error) {
       console.error('删除提醒失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+    }
+  }
+
+  // 处理搜索回调
+  async handleSearchCallback(callbackQuery) {
+    const data = callbackQuery.data;
+    
+    try {
+      if (data === 'search_reminders') {
+        await this.commandHandler.handleSearchReminders(callbackQuery);
+      } else if (data === 'search_news') {
+        await this.newsHandler.handleNewsSearch(callbackQuery.message);
+      } else if (data.startsWith('search_page_')) {
+        // 处理搜索分页
+        const parts = data.replace('search_page_', '').split('_');
+        const keyword = parts[0];
+        const page = parseInt(parts[1]);
+        await this.newsHandler.executeNewsSearch(callbackQuery.message.chat.id, keyword, page);
+      } else {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '未知搜索操作');
+      }
+    } catch (error) {
+      console.error('处理搜索回调失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 搜索失败');
+    }
+  }
+
+  // 处理确认操作
+  async handleConfirmAction(callbackQuery) {
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    const reminderId = parseInt(callbackQuery.data.split('_')[1]);
+
+    try {
+      const result = await reminderService.confirmReminder(reminderId, userId);
+      if (result && result.success) {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 提醒已确认！');
+        await this.reminderHandler.showEditMenu(chatId, userId, reminderId);
+      } else {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+      }
+    } catch (error) {
+      console.error('确认提醒失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+    }
+  }
+
+  // 处理取消操作
+  async handleCancelAction(callbackQuery) {
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    const reminderId = parseInt(callbackQuery.data.split('_')[1]);
+
+    try {
+      const result = await reminderService.cancelReminder(reminderId, userId);
+      if (result && result.success) {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 提醒已取消！');
+        await this.reminderHandler.showEditMenu(chatId, userId, reminderId);
+      } else {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+      }
+    } catch (error) {
+      console.error('取消提醒失败:', error);
       await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
     }
   }

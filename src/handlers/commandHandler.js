@@ -604,6 +604,20 @@ class CommandHandler {
     }
   }
 
+  // 处理管理员返回
+  async handleAdminBack(callbackQuery) {
+    const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
+    
+    try {
+      await this.handleAdminCommand({ chat: { id: chatId }, from: { id: userId } });
+      await this.bot.answerCallbackQuery(callbackQuery.id, '🔙 已返回管理员菜单');
+    } catch (error) {
+      console.error('返回管理员菜单失败:', error);
+      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 返回失败');
+    }
+  }
+
   // 处理管理员回调查询
   async handleAdminCallback(callbackQuery) {
     const data = callbackQuery.data;
@@ -873,6 +887,19 @@ class CommandHandler {
     } catch (error) {
       console.error('获取新闻统计失败:', error);
       throw error;
+    }
+  }
+
+  // 处理返回主菜单
+  async handleMainMenu(msg) {
+    const chatId = msg.chat.id;
+    const userId = msg.from?.id;
+    
+    try {
+      await this.handleStartCommand(msg);
+    } catch (error) {
+      console.error('返回主菜单失败:', error);
+      await this.bot.sendMessage(chatId, '❌ 返回主菜单失败，请重试');
     }
   }
 }
