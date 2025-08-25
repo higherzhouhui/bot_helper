@@ -10,6 +10,7 @@ class NewsService {
       'sina': {
         name: '新浪新闻',
         baseUrl: 'https://news.sina.com.cn',
+        allowedHosts: ['sina.com.cn', 'sina.cn'],
         categories: {
           // 统一键 → 站点键 & 路径 & 全链接
           'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://tech.sina.com.cn/' },
@@ -24,6 +25,7 @@ class NewsService {
       '163': {
         name: '网易新闻',
         baseUrl: 'https://news.163.com',
+        allowedHosts: ['163.com', '126.net'],
         categories: {
           'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://tech.163.com/' },
           'finance': { siteKey: 'money', url: '/money/', fullUrl: 'https://money.163.com/' },
@@ -37,6 +39,7 @@ class NewsService {
       'sohu': {
         name: '搜狐新闻',
         baseUrl: 'https://news.sohu.com',
+        allowedHosts: ['sohu.com'],
         categories: {
           'tech': { siteKey: 'tech', url: '/tech/', fullUrl: 'https://it.sohu.com/' },
           'finance': { siteKey: 'business', url: '/business/', fullUrl: 'https://business.sohu.com/' },
@@ -46,19 +49,116 @@ class NewsService {
           'society': { siteKey: 'society', url: '/society/', fullUrl: 'https://society.sohu.com/' },
           'health': { siteKey: 'health', url: '/health/', fullUrl: 'https://health.sohu.com/' }
         }
+      },
+      'tencent': {
+        name: '腾讯新闻',
+        baseUrl: 'https://news.qq.com',
+        allowedHosts: ['qq.com', 'new.qq.com'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://tech.qq.com/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://finance.qq.com/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://sports.qq.com/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://ent.qq.com/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://new.qq.com/ch/world/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://new.qq.com/ch/society/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://new.qq.com/ch/health/' }
+        }
+      },
+      'xinhuanet': {
+        name: '新华网',
+        baseUrl: 'https://www.news.cn',
+        allowedHosts: ['news.cn', 'xinhuanet.com'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://www.news.cn/tech/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://www.news.cn/fortune/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://sports.news.cn/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://ent.news.cn/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://www.news.cn/world/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://www.news.cn/legal/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://health.news.cn/' }
+        }
+      },
+      'people': {
+        name: '人民网',
+        baseUrl: 'https://www.people.com.cn',
+        allowedHosts: ['people.com.cn'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'http://it.people.com.cn/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'http://finance.people.com.cn/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'http://sports.people.com.cn/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'http://ent.people.com.cn/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'http://world.people.com.cn/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'http://society.people.com.cn/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'http://health.people.com.cn/' }
+        }
+      },
+      'cctv': {
+        name: '央视网',
+        baseUrl: 'https://news.cctv.com',
+        allowedHosts: ['cctv.com', 'cntv.cn'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://news.cctv.com/keji/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://news.cctv.com/caijing/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://sports.cctv.com/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://ent.cctv.com/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://news.cctv.com/guoji/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://news.cctv.com/shehui/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://news.cctv.com/jiankang/' }
+        }
+      },
+      'chinanews': {
+        name: '中国新闻网',
+        baseUrl: 'https://www.chinanews.com.cn',
+        allowedHosts: ['chinanews.com.cn'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://www.chinanews.com.cn/it/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://www.chinanews.com.cn/finance/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://www.chinanews.com.cn/sports/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://www.chinanews.com.cn/yl/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://www.chinanews.com.cn/gj/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://www.chinanews.com.cn/sh/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://www.chinanews.com.cn/jiankang/' }
+        }
+      },
+      'thepaper': {
+        name: '澎湃新闻',
+        baseUrl: 'https://www.thepaper.cn',
+        allowedHosts: ['thepaper.cn'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://www.thepaper.cn/channel_26950' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://www.thepaper.cn/channel_25950' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://www.thepaper.cn/channel_25469' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://www.thepaper.cn/channel_25468' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://www.thepaper.cn/channel_27224' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://www.thepaper.cn/channel_25951' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://www.thepaper.cn/channel_27286' }
+        }
+      },
+      'yicai': {
+        name: '第一财经',
+        baseUrl: 'https://www.yicai.com',
+        allowedHosts: ['yicai.com'],
+        categories: {
+          'tech': { siteKey: 'tech', url: '/', fullUrl: 'https://www.yicai.com/technology/' },
+          'finance': { siteKey: 'finance', url: '/', fullUrl: 'https://www.yicai.com/finance/' },
+          'sports': { siteKey: 'sports', url: '/', fullUrl: 'https://www.yicai.com/sports/' },
+          'ent': { siteKey: 'ent', url: '/', fullUrl: 'https://www.yicai.com/culture/' },
+          'world': { siteKey: 'world', url: '/', fullUrl: 'https://www.yicai.com/news/china/' },
+          'society': { siteKey: 'society', url: '/', fullUrl: 'https://www.yicai.com/news/social/' },
+          'health': { siteKey: 'health', url: '/', fullUrl: 'https://www.yicai.com/life/health/' }
+        }
       }
     };
 
     // 系统统一分类（与 NewsCategory.name 一致）
     this.defaultCategories = [
-      { name: 'web3', displayName: 'Web3', icon: '🕸️', color: '#8A2BE2', sortOrder: 0 },
-      { name: 'tech', displayName: '科技', icon: '🚀', color: '#FF6B6B', sortOrder: 1 },
-      { name: 'finance', displayName: '财经', icon: '💰', color: '#4ECDC4', sortOrder: 2 },
-      { name: 'sports', displayName: '体育', icon: '⚽', color: '#45B7D1', sortOrder: 3 },
-      { name: 'ent', displayName: '娱乐', icon: '🎬', color: '#96CEB4', sortOrder: 4 },
-      { name: 'world', displayName: '国际', icon: '🌍', color: '#FFEAA7', sortOrder: 5 },
-      { name: 'society', displayName: '社会', icon: '🏠', color: '#DDA0DD', sortOrder: 6 },
-      { name: 'health', displayName: '健康', icon: '💊', color: '#98D8C8', sortOrder: 7 }
+      { name: 'tech', displayName: '科技', icon: '🚀', color: '#FF6B6B', sortOrder: 0 },
+      { name: 'finance', displayName: '财经', icon: '💰', color: '#4ECDC4', sortOrder: 1 },
+      { name: 'sports', displayName: '体育', icon: '⚽', color: '#45B7D1', sortOrder: 2 },
+      { name: 'ent', displayName: '娱乐', icon: '🎬', color: '#96CEB4', sortOrder: 3 },
+      { name: 'world', displayName: '国际', icon: '🌍', color: '#FFEAA7', sortOrder: 4 },
+      { name: 'society', displayName: '社会', icon: '🏠', color: '#DDA0DD', sortOrder: 5 },
+      { name: 'health', displayName: '健康', icon: '💊', color: '#98D8C8', sortOrder: 6 }
     ];
 
     this.httpHeaders = {
@@ -140,24 +240,80 @@ class NewsService {
       if (sourceKey === 'sina') {
         const candidates = [
           'a[href*=".sina.com.cn"], a[href*="sina.cn"]',
-          '.news-ct a',
-          '.news-item a',
-          '.feed-card-item a',
-          '.blk12 a',
+          '.news-ct a, .news-item a, .feed-card-item a, .blk12 a, .mod-ct a',
+          'h2 a, h3 a',
           'a[title]'
         ];
         items = this.extractLinks($, candidates, source.baseUrl);
       } else if (sourceKey === '163') {
         const candidates = [
           'a[href*="163.com"], a[href*=".126.net"]',
-          '.data_row a, .newsList a, .ndi_main a, .area_left a',
+          '.data_row a, .newsList a, .ndi_main a, .area_left a, .post_body a',
+          'h2 a, h3 a',
           'a[title]'
         ];
         items = this.extractLinks($, candidates, source.baseUrl);
       } else if (sourceKey === 'sohu') {
         const candidates = [
           'a[href*="sohu.com"]',
-          '.list16 a, .news-box a, .focus-news a, .c-card a',
+          '.list16 a, .news-box a, .focus-news a, .c-card a, .article-box a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'tencent') {
+        const candidates = [
+          'a[href*="qq.com"], a[href*="new.qq.com"]',
+          '.list a, .cf a, .news-list a, .mod a, .Q-tpList a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'xinhuanet') {
+        const candidates = [
+          'a[href*="news.cn"], a[href*="xinhuanet.com"]',
+          '.data_list a, .news a, .tit h3 a, .xwlist a, .dataLeft a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'people') {
+        const candidates = [
+          'a[href*="people.com.cn"]',
+          '.hdNews a, .rlf-article a, .newsItems a, .list a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'cctv') {
+        const candidates = [
+          'a[href*="cctv.com"], a[href*="cntv.cn"]',
+          '.newslist a, .list a, .text a, .swiper-slide a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'chinanews') {
+        const candidates = [
+          'a[href*="chinanews.com.cn"]',
+          '.news_list a, .content_list a, .left_zw a, .dd_bt a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'thepaper') {
+        const candidates = [
+          'a[href*="thepaper.cn"]',
+          '.news_tu a, .news_li a, .list_item a, .card___a3w a',
+          'h2 a, h3 a',
+          'a[title]'
+        ];
+        items = this.extractLinks($, candidates, source.baseUrl);
+      } else if (sourceKey === 'yicai') {
+        const candidates = [
+          'a[href*="yicai.com"]',
+          '.m-list a, .g-list a, .news-list a, .m-module a',
+          'h2 a, h3 a',
           'a[title]'
         ];
         items = this.extractLinks($, candidates, source.baseUrl);
@@ -165,12 +321,19 @@ class NewsService {
 
       const seen = new Set();
       const filtered = [];
+      const allowedHosts = (source && source.allowedHosts) ? source.allowedHosts : [new URL(source.baseUrl).hostname];
       for (const it of items) {
         const title = this.cleanTitle(it.title);
         const href = this.absoluteUrl(source.baseUrl, it.href);
         if (!title || title.length < 6) continue;
         if (!href || href.indexOf('javascript:') === 0) continue;
-        const hostOk = href.includes('sina') || href.includes('163.com') || href.includes('sohu.com');
+        let hostOk = false;
+        try {
+          const host = new URL(href).hostname;
+          hostOk = allowedHosts.some(h => host === h || host.endsWith('.' + h) || host.endsWith(h));
+        } catch (_) {
+          hostOk = false;
+        }
         if (!hostOk) continue;
         if (seen.has(href)) continue;
         seen.add(href);
@@ -238,7 +401,7 @@ class NewsService {
       }
 
       const now = new Date();
-      const categoryId = await this.getCategoryIdByName('web3');
+      const categoryId = await this.getCategoryIdByName('tech'); // 改为科技分类
       const toSave = [];
 
       if (filtered.length === 0) {
@@ -263,7 +426,7 @@ class NewsService {
             sourceUrl: conf.baseUrl,
             imageUrl: null,
             categoryId,
-            tags: 'web3',
+            tags: 'tech,web3', // 更新标签
             publishTime: new Date(now.getTime() - i * 60000),
             viewCount: Math.floor(Math.random() * 5000),
             isHot: Math.random() > 0.7,
@@ -282,7 +445,7 @@ class NewsService {
             sourceUrl: url,
             imageUrl: null,
             categoryId,
-            tags: 'web3',
+            tags: 'tech,web3', // 更新标签
             publishTime: new Date(now.getTime() - i * 60000),
             viewCount: Math.floor(Math.random() * 5000),
             isHot: Math.random() > 0.7,
@@ -293,7 +456,7 @@ class NewsService {
       }
 
       const saved = await this.saveNewsBatch(toSave);
-      console.log(`✅ 成功爬取并保存 ${saved.length} 条 Web3 资讯: ${conf.name}${filtered.length === 0 ? '（模拟）' : ''}`);
+      console.log(`✅ 成功爬取并保存 ${saved.length} 条 Web3 资讯到科技分类: ${conf.name}${filtered.length === 0 ? '（模拟）' : ''}`);
       return saved;
     } catch (error) {
       console.error('❌ 爬取 Web3 资讯失败:', error);

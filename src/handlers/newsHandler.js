@@ -1,28 +1,30 @@
 // 新闻处理器模块
 const newsService = require('../services/newsService');
-const { WEB3_MAIN_KEYBOARD } = require('../constants/keyboards');
+const { NEWS_CATEGORIES_KEYBOARD, BACK_TO_CATEGORIES_BUTTON, WEB3_MAIN_KEYBOARD } = require('../constants/keyboards');
 
 class NewsHandler {
   constructor(bot) {
     this.bot = bot;
+    this.PAGE_SIZE = 6; // 每页显示6条新闻
   }
 
   // 处理新闻命令
-  async handleNewsCommand(msg) {
+  async handleNewsCommand(msg, page = 1) {
     const chatId = msg.chat.id;
     
     try {
-      const { news } = await newsService.getNewsList({ page: 1, limit: 5 });
+      const { news, total, totalPages } = await newsService.getNewsList({ page, limit: this.PAGE_SIZE });
       if (!news || news.length === 0) {
         await this.bot.sendMessage(chatId, '📰 暂无新闻');
         return;
       }
 
-      let message = '📰 最新新闻\n\n';
+      let message = `📰 最新新闻 (第${page}页，共${totalPages}页)\n\n`;
       news.forEach((item, index) => {
         const url = item.sourceUrl || '#';
         const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-        message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+        const globalIndex = (page - 1) * this.PAGE_SIZE + index + 1;
+        message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
         message += `   来源：${item.source}\n`;
         message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
       });
@@ -40,6 +42,19 @@ class NewsHandler {
         ]
       };
 
+      // 添加分页按钮
+      if (totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `news_page_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${totalPages}`, callback_data: 'page_info' });
+        if (page < totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `news_page_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
+
       await this.bot.sendMessage(chatId, message, {
         reply_markup: keyboard,
         parse_mode: 'HTML',
@@ -52,21 +67,28 @@ class NewsHandler {
   }
 
   // 处理热门新闻
-  async handleHotNews(callbackQuery) {
+  async handleHotNews(callbackQuery, page = 1) {
     const chatId = callbackQuery.message.chat.id;
     
     try {
-      const hotNews = await newsService.getHotNews(5);
-      if (!hotNews || hotNews.length === 0) {
+      // 获取所有热门新闻，然后手动分页
+      const allHotNews = await newsService.getHotNews(100); // 获取足够多的热门新闻
+      if (!allHotNews || allHotNews.length === 0) {
         await this.bot.answerCallbackQuery(callbackQuery.id, '📰 暂无热门新闻');
         return;
       }
 
-      let message = '🔥 热门新闻\n\n';
-      hotNews.forEach((item, index) => {
+      const totalPages = Math.ceil(allHotNews.length / this.PAGE_SIZE);
+      const startIndex = (page - 1) * this.PAGE_SIZE;
+      const endIndex = startIndex + this.PAGE_SIZE;
+      const pageNews = allHotNews.slice(startIndex, endIndex);
+
+      let message = `🔥 热门新闻 (第${page}页，共${totalPages}页)\n\n`;
+      pageNews.forEach((item, index) => {
         const url = item.sourceUrl || '#';
         const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-        message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+        const globalIndex = startIndex + index + 1;
+        message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
         message += `   热度：${item.viewCount ?? 0} 次浏览\n`;
         message += `   来源：${item.source}\n`;
         message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
@@ -80,6 +102,19 @@ class NewsHandler {
           ]
         ]
       };
+
+      // 添加分页按钮
+      if (totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `hot_page_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${totalPages}`, callback_data: 'page_info' });
+        if (page < totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `hot_page_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
 
       await this.bot.sendMessage(chatId, message, {
         reply_markup: keyboard,
@@ -109,7 +144,7 @@ class NewsHandler {
         inline_keyboard: [
           ...categories.map(cat => [{
             text: `${cat.icon} ${cat.displayName || cat.name}`,
-            callback_data: `news_category_${cat.id}`
+            callback_data: `category_${cat.id}`
           }]),
           [
             { text: '🔙 返回', callback_data: 'news_back' }
@@ -129,11 +164,11 @@ class NewsHandler {
   }
 
   // 处理分类新闻
-  async handleCategoryNews(callbackQuery, categoryId) {
+  async handleCategoryNews(callbackQuery, categoryId, page = 1) {
     const chatId = callbackQuery.message.chat.id;
     
     try {
-      const { news } = await newsService.getNewsList({ categoryId, page: 1, limit: 5 });
+      const { news, total, totalPages } = await newsService.getNewsList({ categoryId, page, limit: this.PAGE_SIZE });
       if (!news || news.length === 0) {
         await this.bot.answerCallbackQuery(callbackQuery.id, '📰 该分类暂无新闻');
         return;
@@ -147,12 +182,13 @@ class NewsHandler {
         if (cat) headerName = cat.displayName || cat.name;
       } catch (_) {}
 
-      let message = `📰 ${headerName} 分类新闻\n\n`;
+      let message = `📰 ${headerName} 分类新闻 (第${page}页，共${totalPages}页)\n\n`;
       
       news.forEach((item, index) => {
         const url = item.sourceUrl || '#';
         const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-        message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+        const globalIndex = (page - 1) * this.PAGE_SIZE + index + 1;
+        message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
         message += `   来源：${item.source}\n`;
         message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
       });
@@ -165,6 +201,19 @@ class NewsHandler {
           ]
         ]
       };
+
+      // 添加分页按钮
+      if (totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `category_page_${categoryId}_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${totalPages}`, callback_data: 'page_info' });
+        if (page < totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `category_page_${categoryId}_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
 
       await this.bot.sendMessage(chatId, message, {
         reply_markup: keyboard,
@@ -193,20 +242,21 @@ class NewsHandler {
   }
 
   // 执行新闻搜索
-  async executeNewsSearch(chatId, keyword) {
+  async executeNewsSearch(chatId, keyword, page = 1) {
     try {
-      const result = await newsService.searchNews(keyword, { page: 1, limit: 10 });
+      const result = await newsService.searchNews(keyword, { page, limit: this.PAGE_SIZE });
       const items = result.news || [];
       if (items.length === 0) {
         await this.bot.sendMessage(chatId, `🔍 搜索 "${keyword}" 没有找到相关新闻`);
         return;
       }
 
-      let message = `🔍 搜索 "${keyword}" 结果：\n\n`;
+      let message = `🔍 搜索 "${keyword}" 结果 (第${page}页，共${result.totalPages}页)：\n\n`;
       items.forEach((item, index) => {
         const url = item.sourceUrl || '#';
         const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-        message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+        const globalIndex = (page - 1) * this.PAGE_SIZE + index + 1;
+        message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
         message += `   来源：${item.source}\n`;
         message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
       });
@@ -219,6 +269,19 @@ class NewsHandler {
           ]
         ]
       };
+
+      // 添加分页按钮
+      if (result.totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `search_page_${keyword}_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${result.totalPages}`, callback_data: 'page_info' });
+        if (page < result.totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `search_page_${keyword}_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
 
       await this.bot.sendMessage(chatId, message, {
         reply_markup: keyboard,
@@ -265,30 +328,50 @@ class NewsHandler {
 
   // 处理新闻回调
   async handleNewsCallback(callbackQuery) {
-    const data = callbackQuery.data;
-    
     try {
-      if (data === 'news_hot') {
-        await this.handleHotNews(callbackQuery);
-      } else if (data === 'news_categories') {
-        await this.handleNewsCategories(callbackQuery);
-      } else if (data === 'news_search') {
-        await this.handleNewsSearch(callbackQuery);
-      } else if (data === 'news_stats') {
-        await this.handleNewsStats(callbackQuery);
-      } else if (data === 'news_back') {
-        await this.handleNewsBack(callbackQuery);
-      } else if (data.startsWith('news_category_')) {
-        const categoryId = parseInt(data.split('_')[2]);
-        await this.handleCategoryNews(callbackQuery, categoryId);
-      } else if (data === 'news_latest') {
+      const { data } = callbackQuery;
+      const chatId = callbackQuery.message.chat.id;
+
+      if (data === 'news_latest') {
         await this.handleNewsCommand(callbackQuery.message);
-      } else if (data === 'web3_latest') {
-        await this.handleWeb3Command(callbackQuery.message);
+      } else if (data === 'news_hot') {
+        await this.handleHotNews(callbackQuery.message);
+      } else if (data === 'news_categories') {
+        await this.handleNewsCategories(callbackQuery.message);
+      } else if (data === 'news_search') {
+        await this.handleNewsSearch(callbackQuery.message);
+      } else if (data.startsWith('category_')) {
+        const categoryId = data.replace('category_', '');
+        await this.handleCategoryNews(callbackQuery.message, categoryId);
+      } else if (data.startsWith('news_page_')) {
+        // 处理新闻分页
+        const page = parseInt(data.replace('news_page_', ''));
+        await this.handleNewsCommand(callbackQuery.message, page);
+      } else if (data.startsWith('hot_page_')) {
+        // 处理热门新闻分页
+        const page = parseInt(data.replace('hot_page_', ''));
+        await this.handleHotNews(callbackQuery.message, page);
+      } else if (data.startsWith('category_page_')) {
+        // 处理分类新闻分页
+        const parts = data.replace('category_page_', '').split('_');
+        const categoryId = parts[0];
+        const page = parseInt(parts[1]);
+        await this.handleCategoryNews(callbackQuery.message, categoryId, page);
+      } else if (data.startsWith('search_page_')) {
+        // 处理搜索分页
+        const parts = data.replace('search_page_', '').split('_');
+        const keyword = parts[0];
+        const page = parseInt(parts[1]);
+        await this.executeNewsSearch(callbackQuery.message.chat.id, keyword, page);
+      } else if (data === 'page_info') {
+        // 分页信息按钮
+        await this.bot.answerCallbackQuery(callbackQuery.id, '当前页面信息');
+      } else {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '未知操作');
       }
     } catch (error) {
       console.error('处理新闻回调失败:', error);
-      await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 操作失败');
+      await this.bot.answerCallbackQuery(callbackQuery.id, '操作失败，请重试');
     }
   }
 
@@ -297,7 +380,7 @@ class NewsHandler {
     const chatId = callbackQuery.message.chat.id;
     
     try {
-      await this.handleNewsCommand({ chat: { id: chatId } });
+      await this.handleNewsCommand({ chat: { id: chatId } }, 1);
       await this.bot.answerCallbackQuery(callbackQuery.id, '🔙 已返回新闻主菜单');
     } catch (error) {
       console.error('返回新闻主菜单失败:', error);
@@ -306,23 +389,46 @@ class NewsHandler {
   }
 
   // 处理 /web3 命令
-  async handleWeb3Command(msg) {
+  async handleWeb3Command(msg, page = 1) {
     const chatId = msg.chat.id;
     try {
-      const { news } = await newsService.getNewsList({ page: 1, limit: 5, search: 'web3' });
+      const { news, total, totalPages } = await newsService.getNewsList({ page, limit: this.PAGE_SIZE, search: 'web3' });
       let message = '🕸️ Web3 资讯\n\n';
       if (!news || news.length === 0) {
         message += '暂无数据，点击下方来源抓取。';
       } else {
+        message += `(第${page}页，共${totalPages}页)\n\n`;
         news.forEach((item, index) => {
           const url = item.sourceUrl || '#';
           const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-          message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+          const globalIndex = (page - 1) * this.PAGE_SIZE + index + 1;
+          message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
           message += `   来源：${item.source}\n`;
           message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
         });
       }
-      await this.bot.sendMessage(chatId, message, { reply_markup: WEB3_MAIN_KEYBOARD, parse_mode: 'HTML', disable_web_page_preview: true });
+
+      // 深拷贝键盘对象，避免修改原始对象
+      const keyboard = JSON.parse(JSON.stringify(WEB3_MAIN_KEYBOARD));
+
+      // 添加分页按钮
+      if (totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `web3_page_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${totalPages}`, callback_data: 'page_info' });
+        if (page < totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `web3_page_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
+
+      await this.bot.sendMessage(chatId, message, { 
+        reply_markup: keyboard, 
+        parse_mode: 'HTML', 
+        disable_web_page_preview: true 
+      });
     } catch (e) {
       console.error('获取 Web3 资讯失败:', e);
       await this.bot.sendMessage(chatId, '❌ 获取 Web3 资讯失败，请重试');
@@ -334,7 +440,7 @@ class NewsHandler {
     const chatId = callbackQuery.message.chat.id;
     try {
       await newsService.crawlWeb3(sourceKey, 15);
-      const { news } = await newsService.getNewsList({ page: 1, limit: 10, search: 'web3' });
+      const { news, total, totalPages } = await newsService.getNewsList({ page: 1, limit: this.PAGE_SIZE, search: 'web3' });
       if (!news || news.length === 0) {
         await this.bot.answerCallbackQuery(callbackQuery.id, '暂无数据');
         return;
@@ -370,22 +476,44 @@ class NewsHandler {
   }
 
   // 执行 Web3 搜索
-  async executeWeb3Search(chatId, keyword) {
+  async executeWeb3Search(chatId, keyword, page = 1) {
     try {
-      const { news } = await newsService.searchNews(keyword, { page: 1, limit: 10 });
+      const { news, total, totalPages } = await newsService.searchNews(keyword, { page, limit: this.PAGE_SIZE });
       if (!news || news.length === 0) {
         await this.bot.sendMessage(chatId, `🔍 未找到与 "${keyword}" 相关的 Web3 资讯`);
         return;
       }
-      let message = `🔍 Web3 搜索 "${keyword}" 结果：\n\n`;
+      let message = `🔍 Web3 搜索 "${keyword}" 结果 (第${page}页，共${totalPages}页)：\n\n`;
       news.forEach((item, index) => {
         const url = item.sourceUrl || '#';
         const title = item.title?.replace(/</g, '&lt;').replace(/>/g, '&gt;') || '';
-        message += `${index + 1}. <a href="${url}">${title}</a>\n`;
+        const globalIndex = (page - 1) * this.PAGE_SIZE + index + 1;
+        message += `${globalIndex}. <a href="${url}">${title}</a>\n`;
         message += `   来源：${item.source}\n`;
         message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
       });
-      await this.bot.sendMessage(chatId, message, { reply_markup: WEB3_MAIN_KEYBOARD, parse_mode: 'HTML', disable_web_page_preview: true });
+
+      // 深拷贝键盘对象，避免修改原始对象
+      const keyboard = JSON.parse(JSON.stringify(WEB3_MAIN_KEYBOARD));
+
+      // 添加分页按钮
+      if (totalPages > 1) {
+        const paginationRow = [];
+        if (page > 1) {
+          paginationRow.push({ text: '◀️ 上一页', callback_data: `web3_search_page_${keyword}_${page - 1}` });
+        }
+        paginationRow.push({ text: `${page}/${totalPages}`, callback_data: 'page_info' });
+        if (page < totalPages) {
+          paginationRow.push({ text: '下一页 ▶️', callback_data: `web3_search_page_${keyword}_${page + 1}` });
+        }
+        keyboard.inline_keyboard.push(paginationRow);
+      }
+
+      await this.bot.sendMessage(chatId, message, { 
+        reply_markup: keyboard, 
+        parse_mode: 'HTML', 
+        disable_web_page_preview: true 
+      });
     } catch (e) {
       console.error('执行 Web3 搜索失败:', e);
       await this.bot.sendMessage(chatId, '❌ 搜索失败，请重试');
@@ -410,7 +538,7 @@ class NewsHandler {
         await newsService.crawlWeb3('panews', 10).catch(()=>{});
         await newsService.crawlWeb3('investing_cn', 10).catch(()=>{});
         const chatId = callbackQuery.message.chat.id;
-        const { news } = await newsService.getNewsList({ page: 1, limit: 10, search: 'web3' });
+        const { news, total, totalPages } = await newsService.getNewsList({ page: 1, limit: this.PAGE_SIZE, search: 'web3' });
         if (!news || news.length === 0) {
           await this.bot.answerCallbackQuery(callbackQuery.id, '暂无数据');
           return;
@@ -423,8 +551,36 @@ class NewsHandler {
           message += `   来源：${item.source}\n`;
           message += `   时间：${new Date(item.publishTime).toLocaleString('zh-CN')}\n\n`;
         });
-        await this.bot.sendMessage(chatId, message, { reply_markup: WEB3_MAIN_KEYBOARD, parse_mode: 'HTML', disable_web_page_preview: true });
+
+        // 深拷贝键盘对象，避免修改原始对象
+        const keyboard = JSON.parse(JSON.stringify(WEB3_MAIN_KEYBOARD));
+
+        // 添加分页按钮
+        if (totalPages > 1) {
+          const paginationRow = [];
+          paginationRow.push({ text: `1/${totalPages}`, callback_data: 'page_info' });
+          if (totalPages > 1) {
+            paginationRow.push({ text: '下一页 ▶️', callback_data: `web3_page_2` });
+          }
+          keyboard.inline_keyboard.push(paginationRow);
+        }
+
+        await this.bot.sendMessage(chatId, message, { 
+          reply_markup: keyboard, 
+          parse_mode: 'HTML', 
+          disable_web_page_preview: true 
+        });
         await this.bot.answerCallbackQuery(callbackQuery.id, '✅ 已更新');
+      } else if (data.startsWith('web3_page_')) {
+        // 处理 Web3 分页
+        const page = parseInt(data.split('_')[2]);
+        await this.handleWeb3Command(callbackQuery.message, page);
+      } else if (data.startsWith('web3_search_page_')) {
+        // 处理 Web3 搜索分页
+        const parts = data.split('_');
+        const keyword = parts[3];
+        const page = parseInt(parts[4]);
+        await this.executeWeb3Search(callbackQuery.message.chat.id, keyword, page);
       }
     } catch (e) {
       console.error('处理 Web3 回调失败:', e);

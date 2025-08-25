@@ -1,21 +1,25 @@
 // 键盘布局常量模块
 
 // 主菜单键盘
-const MAIN_MENU_KEYBOARD = {
-	inline_keyboard: [
-		[
-			{ text: '⏰ 创建提醒', callback_data: 'create_reminder' },
-			{ text: '📋 我的提醒', callback_data: 'my_reminders' }
-		],
-		[
-			{ text: '📰 最新新闻', callback_data: 'news_latest' },
-			{ text: '🕸️ Web3 资讯', callback_data: 'web3_latest' }
-		],
-		[
-			{ text: '❓ 帮助', callback_data: 'help' },
-			{ text: '📊 统计', callback_data: 'stats' }
-		]
-	]
+const MAIN_KEYBOARD = {
+  inline_keyboard: [
+    [
+      { text: '⏰ 创建提醒', callback_data: 'create_reminder' },
+      { text: '📋 我的提醒', callback_data: 'my_reminders' }
+    ],
+    [
+      { text: '📰 最新资讯', callback_data: 'news_latest' },
+      { text: '🕸️ Web3 资讯', callback_data: 'web3_latest' }
+    ],
+    [
+      { text: '🏷️ 新闻分类', callback_data: 'news_categories' },
+      { text: '🔍 搜索资讯', callback_data: 'news_search' }
+    ],
+    [
+      { text: '⚙️ 个人设置', callback_data: 'user_settings' },
+      { text: '❓ 帮助', callback_data: 'help' }
+    ]
+  ]
 };
 
 // 提醒操作键盘
@@ -125,31 +129,42 @@ const NEWS_MAIN_KEYBOARD = {
 
 // Web3 主菜单键盘
 const WEB3_MAIN_KEYBOARD = {
-	inline_keyboard: [
-		[
-			{ text: '🔥 热门 Web3', callback_data: 'web3_hot' },
-			{ text: '🔍 搜索 Web3', callback_data: 'web3_search' }
-		],
-		[
-			{ text: '📡 ChainFeeds', callback_data: 'web3_chainfeeds' },
-			{ text: '📰 PANews', callback_data: 'web3_panews' },
-			{ text: '📈 Investing', callback_data: 'web3_investing' }
-		]
-	]
+  inline_keyboard: [
+    [
+      { text: '🔥 热门 Web3', callback_data: 'web3_hot' },
+      { text: '🔍 搜索 Web3', callback_data: 'web3_search' }
+    ],
+    [
+      { text: '📡 ChainFeeds', callback_data: 'web3_chainfeeds' },
+      { text: '📰 PANews', callback_data: 'web3_panews' },
+      { text: '📈 Investing', callback_data: 'web3_investing' }
+    ]
+  ]
 };
 
 // 新闻分类键盘
-const NEWS_CATEGORY_KEYBOARD = (categories) => ({
-	inline_keyboard: [
-		...categories.map(cat => [{
-			text: `${cat.icon} ${cat.name}`,
-			callback_data: `news_category_${cat.id}`
-		}]),
-		[
-			{ text: '🔙 返回', callback_data: 'news_back' }
-		]
-	]
-});
+const NEWS_CATEGORIES_KEYBOARD = {
+  inline_keyboard: [
+    [
+      { text: '🚀 科技', callback_data: 'category_tech' },
+      { text: '💰 财经', callback_data: 'category_finance' }
+    ],
+    [
+      { text: '⚽ 体育', callback_data: 'category_sports' },
+      { text: '🎬 娱乐', callback_data: 'category_ent' }
+    ],
+    [
+      { text: '🌍 国际', callback_data: 'category_world' },
+      { text: '🏠 社会', callback_data: 'category_society' }
+    ],
+    [
+      { text: '💊 健康', callback_data: 'category_health' }
+    ],
+    [
+      { text: '🔙 返回主菜单', callback_data: 'main_menu' }
+    ]
+  ]
+};
 
 // 新闻详情键盘
 const NEWS_DETAIL_KEYBOARD = (categoryId) => ({
@@ -290,7 +305,7 @@ const SETTINGS_KEYBOARD = {
 };
 
 module.exports = {
-	MAIN_MENU_KEYBOARD,
+	MAIN_KEYBOARD,
 	REMINDER_ACTION_KEYBOARD,
 	REMINDER_CREATED_KEYBOARD,
 	EDIT_REMINDER_KEYBOARD,
@@ -298,7 +313,7 @@ module.exports = {
 	PRIORITY_SELECTION_KEYBOARD,
 	NEWS_MAIN_KEYBOARD,
 	WEB3_MAIN_KEYBOARD,
-	NEWS_CATEGORY_KEYBOARD,
+	NEWS_CATEGORIES_KEYBOARD,
 	NEWS_DETAIL_KEYBOARD,
 	REMINDER_LIST_KEYBOARD,
 	STATS_KEYBOARD,

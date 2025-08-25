@@ -320,7 +320,7 @@ class TelegramReminderBot {
       } else if (searchState.type === 'web3') {
         await this.newsHandler.executeWeb3Search(chatId, text);
       } else if (searchState.type === 'reminder') {
-        await this.executeReminderSearch(chatId, userId, text);
+        await this.reminderHandler.handleReminderText(chatId, text);
       }
     } catch (error) {
       console.error('处理搜索状态输入失败:', error);
@@ -363,14 +363,18 @@ class TelegramReminderBot {
         await this.newsHandler.handleNewsCallback(callbackQuery);
       } else if (data.startsWith('web3_')) {
         await this.newsHandler.handleWeb3Callback(callbackQuery);
-      } else if (data.startsWith('create_') || data.startsWith('my_') || 
-                 data === 'help' || data === 'stats' || data.startsWith('back_to_') ||
-                 data === 'reminder_stats' || data === 'search_reminders' || data === 'cleanup_completed') {
-        await this.commandHandler.handleCommandCallback(callbackQuery);
-      } else if (data.startsWith('admin_')) {
-        await this.commandHandler.handleAdminCallback(callbackQuery);
+      } else if (data.startsWith('reminder_')) {
+        await this.reminderHandler.handleReminderCallback(callbackQuery);
+      } else if (data.startsWith('user_')) {
+        await this.userService.handleUserCallback(callbackQuery);
+      } else if (data === 'help') {
+        await this.commandHandler.handleHelpCommand(callbackQuery.message);
+      } else if (data === 'main_menu') {
+        await this.commandHandler.handleMainMenu(callbackQuery.message);
+      } else if (data === 'page_info') {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '当前页面信息');
       } else {
-        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 未知操作');
+        await this.bot.answerCallbackQuery(callbackQuery.id, '未知操作');
       }
     } catch (error) {
       console.error('处理按钮回调失败:', error);
@@ -690,36 +694,37 @@ class TelegramReminderBot {
 
   // 启动定时任务
   startScheduledTasks() {
-    // 新闻爬取轮询
-    const newsTasks = [
-      { source: 'sina', cat: 'tech' },
-      { source: '163', cat: 'tech' },
-      { source: 'sohu', cat: 'tech' },
-      { source: 'sina', cat: 'finance' }
-    ];
-    let newsIdx = 0;
-
-    // 立即执行一次
+    // 新闻轮询
+    const newsTasks = ['sina', '163', 'sohu', 'tencent', 'xinhuanet', 'people', 'cctv', 'chinanews', 'thepaper', 'yicai'];
+    const newsCategories = ['tech', 'finance', 'sports', 'ent', 'world', 'society', 'health'];
+    
+    // 首次抓取
     (async () => {
-      try {
-        for (const t of newsTasks.slice(0, 2)) {
-          await newsService.crawlNews(t.source, t.cat, 10);
+      for (const src of newsTasks) {
+        for (const cat of newsCategories) {
+          try {
+            await newsService.crawlNews(src, cat, 8);
+          } catch (e) {
+            console.warn(`首次 ${src} ${cat} 抓取失败:`, e.message || e);
+          }
         }
-      } catch (e) {
-        console.warn('首次新闻抓取失败:', e.message || e);
       }
     })();
 
+    // 定时抓取
     const newsInterval = setInterval(async () => {
-      try {
-        const t = newsTasks[newsIdx % newsTasks.length];
-        newsIdx++;
-        await newsService.crawlNews(t.source, t.cat, 15);
-      } catch (error) {
-        console.error('新闻爬取任务失败:', error.message || error);
+      let widx = 0;
+      for (const src of newsTasks) {
+        for (const cat of newsCategories) {
+          try {
+            await newsService.crawlNews(src, cat, 12);
+          } catch (error) {
+            console.error(`${src} ${cat} 爬取任务失败:`, error.message || error);
+          }
+        }
       }
-    }, config.NEWS_CRAWL_INTERVAL);
-    
+    }, config.NEWS_CRAWL_INTERVAL || 300000); // 5分钟
+
     this.intervals.push(newsInterval);
 
     // Web3 轮询
@@ -745,8 +750,8 @@ class TelegramReminderBot {
       } catch (error) {
         console.error('Web3 爬取任务失败:', error.message || error);
       }
-    }, Math.max(60000, Math.floor(config.NEWS_CRAWL_INTERVAL / 2)));
-    
+    }, Math.max(60000, Math.floor((config.NEWS_CRAWL_INTERVAL || 300000) / 2)));
+
     this.intervals.push(web3Interval);
 
     // 个性化简报：使用 cron 每分钟执行一次
