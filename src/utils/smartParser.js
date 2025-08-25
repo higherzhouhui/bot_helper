@@ -10,11 +10,16 @@ class SmartParser {
 
     // 分类关键词映射
     this.categoryKeywords = {
-      '工作': ['工作', 'work', '上班', '会议', '项目', '任务', 'deadline', '报告'],
-      '生活': ['生活', 'life', '吃饭', '睡觉', '购物', '家务', '打扫', '洗衣服'],
-      '学习': ['学习', 'study', '读书', '上课', '作业', '考试', '复习', '练习'],
-      '健康': ['健康', 'health', '运动', '健身', '跑步', '瑜伽', '吃药', '体检'],
-      '娱乐': ['娱乐', 'entertainment', '游戏', '电影', '音乐', '聚会', '约会', '旅行']
+      '工作': ['工作', 'work', '上班', '会议', '开会', '项目', '任务', 'deadline', '报告', '复盘', '汇报', '跟进', '对接', '客户', '同事', '邮件', 'OA', '打卡', '签到', '面试', '招聘', '绩效'],
+      '生活': ['生活', 'life', '吃饭', '睡觉', '购物', '买菜', '家务', '打扫', '洗衣服', '取快递', '快递', '水电煤', '物业', '房租', '租金', '倒垃圾', '充电', '维修', '保洁'],
+      '学习': ['学习', 'study', '读书', '上课', '作业', '考试', '复习', '练习', '自习', '课程', '讲座', '论文', '毕设', '背单词', '英语', '网课', 'MOOC', '刷题', '题目', '训练营'],
+      '健康': ['健康', 'health', '运动', '健身', '跑步', '瑜伽', '吃药', '体检', '看病', '门诊', '挂号', '复诊', '打针', '维生素', '牙医', '牙科', '眼科', '冥想', '骑行', '健走'],
+      '娱乐': ['娱乐', 'entertainment', '游戏', '打游戏', '电竞', '电影', '看电影', '音乐', '演唱会', '音乐会', '综艺', '聚会', '约会', '旅行', '旅游', '出游', 'KTV', '唱歌', '桌游', '漫展', '看剧', '追剧'] ,
+      '财务': ['财务', '理财', '记账', '报销', '发票', '税', '税务', '纳税', '发薪', '工资', '还款', '贷款', '信用卡', '花呗', '白条', '账单', '预算', '对账'],
+      '出行': ['出行', '交通', '机票', '航班', '候机', '登机', '火车', '高铁', '动车', '车票', '打车', '滴滴', '地铁', '公交', '自驾', '租车', '换乘'],
+      '家庭': ['家庭', '孩子', '宝宝', '接送', '接娃', '接孩子', '夫妻', '父母', '爸爸', '妈妈', '老人', '亲戚', '宠物', '喂猫', '喂狗', '铲屎官', '家长会'],
+      '社交': ['社交', '朋友', '同学', '同事', '聚会', '约饭', '约酒', '约咖', '咖啡', '啤酒', '生日', '送礼', '礼物', '拜访', '见面'],
+      '购物': ['购物', '下单', '付款', '支付', '退款', '退货', '收货', '取件', '拼多多', '淘宝', '京东', '天猫', '抢购', '预售']
     };
 
     // 重复模式关键词
@@ -390,6 +395,20 @@ class SmartParser {
       /晚上睡觉/gi,
     ];
     
+    // 新增：清理口语化时间词与模式
+    const patternsColloquial = [
+      /(一会儿|等会儿|稍后|过会儿)/gi,
+      /(饭点|吃饭时间|午饭|午餐|晚饭|晚餐|晚饭点)/gi,
+      /\d{1,2}点左右/gi,
+      /\d{1,2}点多/gi,
+      /\d{1,2}点前/gi,
+      /\d{1,2}点后/gi,
+      /(本周|这周)\s*[一二三四五六日天](?:\s*(上午|下午|晚上|中午))?(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
+      /下周\s*[一二三四五六日天](?:\s*(上午|下午|晚上|中午))?(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
+      /(下个\s*周末|下周末)(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
+      /(月底|月初|月中)/gi
+    ];
+    
     // 按优先级顺序清理
     // 1. 先清理最具体的时间表达式
     for (const p of patternsWithFen) s = s.replace(p, '');
@@ -408,6 +427,9 @@ class SmartParser {
     
     // 6. 清理工作时间表达
     for (const p of patternsWorkTime) s = s.replace(p, '');
+    
+    // 7. 清理新增口语化时间表达
+    for (const p of patternsColloquial) s = s.replace(p, '');
 
     // 移除调度/频率词
     const scheduleWords = ['天天', '每周', '每月', '每年', '工作日', '周末'];
@@ -445,76 +467,43 @@ class SmartParser {
       { pattern: /每日\s*(\d{1,2}):(\d{1,2})/, type: 'dailyTime' },
       { pattern: /每天\s*(\d{1,2})点/, type: 'dailySimple' },
       { pattern: /每日\s*(\d{1,2})点/, type: 'dailySimple' },
-      
-      // 明天时间（扩展）
-      { pattern: /明天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tomorrowTime' },
-      { pattern: /明天\s*(\d{1,2}):(\d{1,2})/, type: 'tomorrowTime' },
-      
-      // 今天时间（扩展）
-      { pattern: /今天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'todayTime' },
-      { pattern: /今天\s*(\d{1,2}):(\d{1,2})/, type: 'todayTime' },
-      
-      // 后天时间（扩展）
-      { pattern: /后天\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dayAfterTomorrowTime' },
-      { pattern: /后天\s*(\d{1,2}):(\d{1,2})/, type: 'dayAfterTomorrowTime' },
-      
-      // 今晚时间（扩展）
-      { pattern: /今晚\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tonightTime' },
-      { pattern: /今晚\s*(\d{1,2}):(\d{1,2})/, type: 'tonightTime' },
-      
-      // 下午/上午时间（新增）
-      { pattern: /今天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'todayWithTimeOfDay' },
-      { pattern: /明天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'tomorrowWithTimeOfDay' },
-      { pattern: /后天\s*(上午|下午|晚上|中午)\s*(\d{1,2})点\s*(\d{1,2})/, type: 'dayAfterTomorrowWithTimeOfDay' },
-      
-      // 周末/工作日（新增）
-      { pattern: /这个\s*周末\s*(\d{1,2})点\s*(\d{1,2})/, type: 'thisWeekend' },
-      { pattern: /下个\s*周末\s*(\d{1,2})点\s*(\d{1,2})/, type: 'nextWeekend' },
-      { pattern: /工作日\s*(\d{1,2})点\s*(\d{1,2})/, type: 'weekday' },
-      
-      // 过多少时间后（扩展）
-      { pattern: /过\s*(\d+)\s*小时\s*后/, type: 'hoursLater' },
-      { pattern: /过\s*(\d+)\s*分钟\s*后/, type: 'minutesLater' },
-      { pattern: /过\s*(\d+)\s*秒\s*后/, type: 'secondsLater' },
-      { pattern: /再过\s*(\d+)\s*小时/, type: 'hoursLater' },
-      { pattern: /再过\s*(\d+)\s*分钟/, type: 'minutesLater' },
-      { pattern: /再过\s*(\d+)\s*秒/, type: 'secondsLater' },
-      
-      // 几点几分（多种表达）
-      { pattern: /(\d{1,2})\s*点\s*(\d{1,2})\s*分/, type: 'time' },
-      { pattern: /(\d{1,2})\s*点\s*(\d{1,2})/, type: 'time' },
-      { pattern: /(\d{1,2})[:：](\d{1,2})/, type: 'time' },
-      
-      // 整点时间（新增）
-      { pattern: /(\d{1,2})点整/, type: 'exactHour' },
-      { pattern: /明天\s*(\d{1,2})点整/, type: 'tomorrowExactHour' },
-      { pattern: /今天\s*(\d{1,2})点整/, type: 'todayExactHour' },
-      { pattern: /后天\s*(\d{1,2})点整/, type: 'dayAfterTomorrowExactHour' },
-      { pattern: /今晚\s*(\d{1,2})点整/, type: 'tonightExactHour' },
-      { pattern: /每天\s*(\d{1,2})点整/, type: 'dailyExactHour' },
-      { pattern: /每日\s*(\d{1,2})点整/, type: 'dailyExactHour' },
-      
-      // 半点时间（新增）
-      { pattern: /(\d{1,2})点半/, type: 'halfHour' },
-      { pattern: /明天\s*(\d{1,2})点半/, type: 'tomorrowHalfHour' },
-      { pattern: /今天\s*(\d{1,2})点半/, type: 'todayHalfHour' },
-      { pattern: /后天\s*(\d{1,2})点半/, type: 'dayAfterTomorrowHalfHour' },
-      { pattern: /今晚\s*(\d{1,2})点半/, type: 'tonightHalfHour' },
-      
-      // 一刻钟时间（新增）
-      { pattern: /(\d{1,2})点一刻/, type: 'quarterHour' },
-      { pattern: /(\d{1,2})点三刻/, type: 'threeQuarterHour' },
-      { pattern: /明天\s*(\d{1,2})点一刻/, type: 'tomorrowQuarterHour' },
-      { pattern: /今天\s*(\d{1,2})点一刻/, type: 'todayQuarterHour' },
-      
-      // 工作时间表达（新增）
-      { pattern: /上班时间/, type: 'workTime' },
-      { pattern: /下班时间/, type: 'offWorkTime' },
-      { pattern: /午休时间/, type: 'lunchTime' },
-      { pattern: /早上起床/, type: 'morningWakeUp' },
-      { pattern: /晚上睡觉/, type: 'nightSleep' },
-      
-      // 原有的时间表达式保持不变
+
+      // 口语化：一会儿/等会儿/稍后/过会儿（默认+10分钟）
+      { pattern: /(一会儿|等会儿|稍后|过会儿)/, type: 'soon' },
+
+      // 口语化：早上/中午/下午/傍晚/晚上/凌晨 + 不带具体小时
+      { pattern: /(早上|上午)/, type: 'morningDefault' },
+      { pattern: /(中午)/, type: 'noonDefault' },
+      { pattern: /(下午)/, type: 'afternoonDefault' },
+      { pattern: /(傍晚)/, type: 'duskDefault' },
+      { pattern: /(晚上|夜里|夜间)/, type: 'eveningDefault' },
+      { pattern: /(凌晨)/, type: 'lateNightDefault' },
+
+      // 口语化：饭点
+      { pattern: /(饭点|吃饭时间|午饭|午餐)/, type: 'lunchDefault' },
+      { pattern: /(晚饭|晚餐|晚饭点)/, type: 'dinnerDefault' },
+
+      // 口语化：x点左右/x点多
+      { pattern: /(\d{1,2})点左右/, type: 'aroundHour' },
+      { pattern: /(\d{1,2})点多/, type: 'aroundHour' },
+
+      // 口语化：x点前/x点后
+      { pattern: /(\d{1,2})点前/, type: 'beforeHour' },
+      { pattern: /(\d{1,2})点后/, type: 'afterHour' },
+
+      // 本周/这周/下周 + 星期 + 可选时段/时间
+      { pattern: /(本周|这周)\s*([一二三四五六日天])(?:\s*(上午|下午|晚上|中午))?(?:\s*(\d{1,2})点(?:\s*(\d{1,2})分)?)?/, type: 'thisWeekDayDetailed' },
+      { pattern: /下\s*周\s*([一二三四五六日天])(?:\s*(上午|下午|晚上|中午))?(?:\s*(\d{1,2})点(?:\s*(\d{1,2})分)?)?/, type: 'nextWeekDayDetailed' },
+
+      // 下周末（可带时间）
+      { pattern: /(下个\s*周末|下周末)(?:\s*(\d{1,2})点(?:\s*(\d{1,2})分)?)?/, type: 'nextWeekendMaybeTime' },
+
+      // 月度口语：月底/月初/月中
+      { pattern: /(月底)/, type: 'endOfMonth' },
+      { pattern: /(月初)/, type: 'beginOfMonth' },
+      { pattern: /(月中)/, type: 'midOfMonth' },
+
+      // 已有规则保持不变
       { pattern: /今晚\s*(\d{1,2})点/, type: 'tonight' },
       { pattern: /明天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点/, type: 'tomorrow' },
       { pattern: /今天\s*(上午|下午|晚上|中午)?\s*(\d{1,2})点/, type: 'today' },
