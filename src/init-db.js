@@ -4,7 +4,17 @@ const fs = require('fs');
 // 根据 NODE_ENV 确定使用哪个环境变量文件
 function loadEnvFile() {
   const env = process.env.NODE_ENV || 'development';
-  const envFile = env != 'development' ? '.env' : '.env.dev';
+  let envFile;
+  
+  // 修复环境文件选择逻辑，与config/index.js保持一致
+  if (env === 'production') {
+    envFile = '.env';
+  } else if (env === 'development') {
+    envFile = '.env.dev';
+  } else {
+    envFile = '.env.dev'; // 默认使用开发环境配置
+  }
+  
   // 尝试加载环境变量文件
   const envPath = path.resolve(process.cwd(), envFile);
   
@@ -12,7 +22,14 @@ function loadEnvFile() {
     require('dotenv').config({ path: envPath });
     console.log(`✅ 已加载环境配置文件: ${envFile}`);
   } else {
-    console.log(`⚠️  环境配置文件不存在: ${envFile}，使用默认配置`);
+    // 如果指定文件不存在，尝试加载默认文件
+    const defaultEnvPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(defaultEnvPath)) {
+      require('dotenv').config({ path: defaultEnvPath });
+      console.log(`✅ 已加载默认环境配置文件: .env`);
+    } else {
+      console.log(`⚠️  环境配置文件不存在: ${envFile} 和 .env，使用系统环境变量`);
+    }
   }
 }
 

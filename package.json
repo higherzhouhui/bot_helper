@@ -10,6 +10,9 @@
     "init-db": "node src/init-db.js",
     "setup-categories": "node src/scripts/setupDefaultCategories.js",
     "crawl-news": "node src/scripts/crawlNews.js",
+    "health-check": "node health-check.js",
+    "cleanup": "node src/scripts/cleanup.js",
+    "backup": "node src/scripts/backup.js",
     "build": "set NODE_ENV=production esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js",
     "build:win": "esbuild src/bot.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/bot.js && esbuild src/init-db.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/init-db.js && esbuild src/scripts/crawlNews.js --bundle --platform=node --external:pg --external:pg-hstore --external:mysql2 --external:mariadb --external:tedious --external:oracledb --outfile=dist/crawlNews.js",
     "start:dist": "NODE_ENV=production node dist/bot.js",
@@ -17,7 +20,8 @@
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:restart": "pm2 restart ecosystem.config.js",
     "pm2:stop": "pm2 stop ecosystem.config.js",
-    "pm2:logs": "pm2 logs --lines 200"
+    "pm2:logs": "pm2 logs --lines 200",
+    "pm2:status": "pm2 status"
   },
   "keywords": [
     "xiaozhi",

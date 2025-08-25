@@ -64,6 +64,11 @@ class SmartParser {
 
   // 智能解析提醒文本
   parseReminderText(text) {
+    // 输入验证
+    if (!text || typeof text !== 'string') {
+      throw new Error('输入文本不能为空且必须是字符串');
+    }
+
     // 预处理文本
     const processedText = this.preprocessText(text);
     
@@ -77,29 +82,51 @@ class SmartParser {
       tags: [],
       notes: '',
       repeatPattern: 'none',
-      repeatEndDate: null
+      repeatEndDate: null,
+      confidence: 0.8, // 添加置信度
+      suggestions: [] // 添加建议
     };
 
-    // 提取优先级
-    result.priority = this.extractPriority(processedText);
-    
-    // 提取分类
-    result.category = this.extractCategory(processedText);
-    
-    // 提取标签
-    result.tags = this.extractTags(processedText);
-    
-    // 提取重复模式
-    result.repeatPattern = this.extractRepeatPattern(processedText);
-    
-    // 提取备注
-    result.notes = this.extractNotes(processedText);
-    
-    // 提取时间
-    result.time = this.parseTimeExpression(processedText);
-    
-    // 清理消息内容（移除时间表达等）
-    result.message = this.cleanMessage(processedText);
+    try {
+      // 提取优先级
+      result.priority = this.extractPriority(processedText);
+      
+      // 提取分类
+      result.category = this.extractCategory(processedText);
+      
+      // 提取标签
+      result.tags = this.extractTags(processedText);
+      
+      // 提取重复模式
+      result.repeatPattern = this.extractRepeatPattern(processedText);
+      
+      // 提取备注
+      result.notes = this.extractNotes(processedText);
+      
+      // 提取时间
+      result.time = this.parseTimeExpression(processedText);
+      
+      // 清理消息内容
+      result.message = this.stripTimeExpressions(processedText);
+      result.message = this.stripPriorityExpressions(result.message);
+      result.message = this.stripCategoryExpressions(result.message);
+      result.message = this.stripRepeatExpressions(result.message);
+      result.message = this.stripTagExpressions(result.message);
+      result.message = this.stripNotesExpressions(result.message);
+      
+      // 生成建议
+      result.suggestions = this.generateSuggestions(result);
+      
+      // 计算置信度
+      result.confidence = this.calculateConfidence(result);
+      
+    } catch (error) {
+      console.error('解析提醒文本时发生错误:', error);
+      // 返回基本结果，不抛出错误
+      result.message = processedText;
+      result.confidence = 0.3;
+      result.suggestions = ['请检查输入格式', '尝试使用更简单的表达'];
+    }
 
     return result;
   }
@@ -181,280 +208,122 @@ class SmartParser {
     return '';
   }
 
-  // 清理消息内容
+  // 清理消息内容（移除时间表达等）
   cleanMessage(text) {
-    let cleaned = text;
-    
-    // 移除标签
-    cleaned = cleaned.replace(this.tagRegex, '');
-    
-    // 移除备注部分
-    const noteSeparators = ['备注:', 'note:', '说明:', 'description:', '详情:'];
-    for (const separator of noteSeparators) {
-      const index = cleaned.indexOf(separator);
-      if (index !== -1) {
-        cleaned = cleaned.substring(0, index).trim();
-        break;
-      }
-    }
+    // 保持向后兼容
+    return this.stripTimeExpressions(text);
+  }
 
-    // 先移除时间表达
-    cleaned = this.stripTimeExpressions(cleaned);
-
-    // 移除常见冗余提示词，但保留一些有用的动词
-    const fillerWords = ['提醒我', '提醒', '记得', '帮我', '请', '一下', '麻烦'];
-    for (const w of fillerWords) {
-      const regex = new RegExp(w, 'g');
-      cleaned = cleaned.replace(regex, '');
-    }
+  // 移除时间表达式
+  stripTimeExpressions(text) {
+    if (!text) return '';
     
-    // 移除优先级关键词
-    for (const keywords of Object.values(this.priorityKeywords)) {
-      for (const keyword of keywords) {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        cleaned = cleaned.replace(regex, '');
-      }
-    }
+    // 移除各种时间表达式
+    let cleaned = text
+      .replace(/(今天|明天|后天|昨天|前天|今晚|明晚|今晚|明早|今早|明早|今晚|明晚)/g, '')
+      .replace(/(上午|下午|晚上|凌晨|中午|傍晚|深夜|早晨|中午|下午|晚上)/g, '')
+      .replace(/(\d+)\s*点\s*(\d+)?\s*分?/g, '')
+      .replace(/(\d+)\s*:\s*(\d+)/g, '')
+      .replace(/(\d+)\s*小时后?/g, '')
+      .replace(/(\d+)\s*分钟后?/g, '')
+      .replace(/(\d+)\s*天后?/g, '')
+      .replace(/(\d+)\s*周后?/g, '')
+      .replace(/(\d+)\s*月后?/g, '')
+      .replace(/(\d+)\s*年后?/g, '')
+      .replace(/(下个?|上个?)\s*(周一|周二|周三|周四|周五|周六|周日|星期[一二三四五六日])/g, '')
+      .replace(/(周一|周二|周三|周四|周五|周六|周日|星期[一二三四五六日])/g, '')
+      .replace(/(每天|每周|每月|每年|天天|日日|周周|月月|年年)/g, '')
+      .replace(/(\d+)\s*号/g, '')
+      .replace(/(\d+)\s*日/g, '');
     
-    // 移除分类关键词
-    for (const keywords of Object.values(this.categoryKeywords)) {
-      for (const keyword of keywords) {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        cleaned = cleaned.replace(regex, '');
-      }
-    }
-    
-    // 移除重复模式关键词
-    for (const keywords of Object.values(this.repeatPatterns)) {
-      for (const keyword of keywords) {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-        cleaned = cleaned.replace(regex, '');
-      }
-    }
-    
-    // 清理多余空格与标点
-    cleaned = cleaned.replace(/[，,。.!？?]+/g, ' ').replace(/\s+/g, ' ').trim();
-    
-    // 如果清理后内容太短，尝试保留更多原始信息
-    if (cleaned.length < 3) {
-      // 重新清理，但保留更多内容
-      cleaned = text;
-      // 只移除时间表达和标签
-      cleaned = cleaned.replace(this.tagRegex, '');
-      cleaned = this.stripTimeExpressions(cleaned);
-      // 移除备注
-      for (const separator of noteSeparators) {
-        const index = cleaned.indexOf(separator);
-        if (index !== -1) {
-          cleaned = cleaned.substring(0, index).trim();
-          break;
-        }
-      }
-      cleaned = cleaned.replace(/[，,。.!？?]+/g, ' ').replace(/\s+/g, ' ').trim();
-    }
+    // 清理多余空格
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
     
     return cleaned;
   }
 
-  // 移除时间表达（不改变 parseTimeExpression 的解析逻辑）
-  stripTimeExpressions(text) {
-    let s = text;
+  // 移除优先级表达式
+  stripPriorityExpressions(text) {
+    if (!text) return '';
     
-    // 第一步：优先清理最具体的时间表达式（带"分"字的完整时间）
-    const patternsWithFen = [
-      // 每天重复时间（扩展）
-      /每天\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /每天\s*\d{1,2}:\d{1,2}/gi,
-      /每日\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /每日\s*\d{1,2}:\d{1,2}/gi,
-      
-      // 明天/今天/后天时间（扩展）
-      /明天\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /明天\s*\d{1,2}:\d{1,2}/gi,
-      /今天\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /今天\s*\d{1,2}:\d{1,2}/gi,
-      /后天\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /后天\s*\d{1,2}:\d{1,2}/gi,
-      /今晚\s*\d{1,2}点\s*\d{1,2}分/gi,
-      /今晚\s*\d{1,2}:\d{1,2}/gi,
-      
-      // 下午/上午时间（新增）
-      /今天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
-      /明天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
-      /后天\s*(上午|下午|晚上|中午)\s*\d{1,2}点\s*\d{1,2}/gi,
-      
-      // 周末/工作日（新增）
-      /这个\s*周末\s*\d{1,2}点\s*\d{1,2}/gi,
-      /下个\s*周末\s*\d{1,2}点\s*\d{1,2}/gi,
-      /工作日\s*\d{1,2}点\s*\d{1,2}/gi,
-      
-      // 过多少时间后（扩展）
-      /过\s*\d+\s*小时\s*后/gi,
-      /过\s*\d+\s*分钟\s*后/gi,
-      /过\s*\d+\s*秒\s*后/gi,
-      /再过\s*\d+\s*小时/gi,
-      /再过\s*\d+\s*分钟/gi,
-      /再过\s*\d+\s*秒/gi,
-      
-      // 几点几分（多种表达）
-      /\d{1,2}\s*点\s*\d{1,2}\s*分/gi,
-      /\d{1,2}[:：]\d{1,2}/gi,
-      
-      // 传统带"分"字格式
-      /\b\d{1,2}点\s*\d{1,2}分/g,  // 优先匹配"20点05分"
+    const priorityWords = [
+      '紧急', 'urgent', '立即', '马上', '立刻', 'asap', 'as soon as possible',
+      '重要', 'high', '关键', 'critical',
+      '普通', 'normal', '一般', '常规',
+      '低', 'low', '不急', '慢慢', '不急'
     ];
     
-    // 第二步：清理半点时间表达式（优先于普通时间）
-    const patternsHalfHour = [
-      /\d{1,2}点半/gi,
-      /明天\s*\d{1,2}点半/gi,
-      /今天\s*\d{1,2}点半/gi,
-      /后天\s*\d{1,2}点半/gi,
-      /今晚\s*\d{1,2}点半/gi,
-      /每天\s*\d{1,2}点半/gi,
-      /每日\s*\d{1,2}点半/gi,
-    ];
+    let cleaned = text;
+    priorityWords.forEach(word => {
+      const regex = new RegExp(word, 'gi');
+      cleaned = cleaned.replace(regex, '');
+    });
     
-    // 第三步：清理一刻钟时间表达式
-    const patternsQuarterHour = [
-      /\d{1,2}点一刻/gi,
-      /\d{1,2}点三刻/gi,
-      /明天\s*\d{1,2}点一刻/gi,
-      /今天\s*\d{1,2}点一刻/gi,
-    ];
-    
-    // 第四步：清理整点时间表达式
-    const patternsExactHour = [
-      /\d{1,2}点整/gi,
-      /明天\s*\d{1,2}点整/gi,
-      /今天\s*\d{1,2}点整/gi,
-      /后天\s*\d{1,2}点整/gi,
-      /今晚\s*\d{1,2}点整/gi,
-      /每天\s*\d{1,2}点整/gi,
-      /每日\s*\d{1,2}点整/gi,
-    ];
-    
-    // 第五步：清理不带"分"字的时间表达式
-    const patternsWithoutFen = [
-      // 每天20点05（不带分）
-      /每天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      /每日\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      
-      // 明天20点05（不带分）
-      /明天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      
-      // 今天20点05（不带分）
-      /今天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      
-      // 后天20点05（不带分）
-      /后天\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      
-      // 今晚20点05（不带分）
-      /今晚\s*\d{1,2}点\s*\d{1,2}(?!分)/gi,
-      
-      // 其他时间格式
-      /今晚\s*\d{1,2}点(?:\d{1,2}分)?/gi,
-      /今天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
-      /明天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
-      /后天\s*(上午|下午|晚上|中午)?\s*\d{1,2}点(?:\d{1,2}分)?/gi,
-      
-      /\b\d{1,2}:\d{1,2}\b/g,
-      /\b\d{1,2}点(?:\d{1,2}分)?/g,
-      /在\s*\d{1,2}(?::\d{1,2})?点?(?:\d{1,2}分)?/g,
-      
-      // 英文简写时间单位
-      /\d+\s*[Ss]\s*后/gi,  // 秒：10s、10S
-      /\d+\s*[Mm]\s*后/gi,  // 分钟：1m、1M
-      /\d+\s*[Hh]\s*后/gi,  // 小时：1h、1H
-      /\d+\s*[Dd]\s*后/gi,  // 天：1d、1D
-      
-      // 新增：相对时间表达式
-      /\d+\s*小时\s*后/gi,
-      /\d+\s*小时后/gi,
-      /\d+\s*分钟\s*后/gi,
-      /\d+\s*分钟后/gi,
-      /\d+\s*秒\s*后/gi,
-      /\d+\s*秒后/gi,
-      
-      // 中文数字相对时间
-      /(一|两|三|四|五|六|七|八|九|十)\s*小时\s*后/gi,
-      /(一|两|三|四|五|六|七|八|九|十)\s*分钟后/gi,
-      /(一|两|三|四|五|六|七|八|九|十)\s*秒后/gi,
-      
-      // 相对日期表达式
-      /(一|两|三|四|五|六|七|八|九|十|百|千|万)\s*天\s*后/gi,
-      /\d+\s*天\s*后/gi
-    ];
-    
-    // 第六步：清理工作时间表达
-    const patternsWorkTime = [
-      /上班时间/gi,
-      /下班时间/gi,
-      /午休时间/gi,
-      /早上起床/gi,
-      /晚上睡觉/gi,
-    ];
-    
-    // 新增：清理口语化时间词与模式
-    const patternsColloquial = [
-      /(一会儿|等会儿|稍后|过会儿)/gi,
-      /(饭点|吃饭时间|午饭|午餐|晚饭|晚餐|晚饭点)/gi,
-      /\d{1,2}点左右/gi,
-      /\d{1,2}点多/gi,
-      /\d{1,2}点前/gi,
-      /\d{1,2}点后/gi,
-      /(本周|这周)\s*[一二三四五六日天](?:\s*(上午|下午|晚上|中午))?(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
-      /下周\s*[一二三四五六日天](?:\s*(上午|下午|晚上|中午))?(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
-      /(下个\s*周末|下周末)(?:\s*\d{1,2}点(?:\s*\d{1,2}分)?)?/gi,
-      /(月底|月初|月中)/gi
-    ];
-    
-    // 按优先级顺序清理
-    // 1. 先清理最具体的时间表达式
-    for (const p of patternsWithFen) s = s.replace(p, '');
-    
-    // 2. 清理半点时间
-    for (const p of patternsHalfHour) s = s.replace(p, '');
-    
-    // 3. 清理一刻钟时间
-    for (const p of patternsQuarterHour) s = s.replace(p, '');
-    
-    // 4. 清理整点时间
-    for (const p of patternsExactHour) s = s.replace(p, '');
-    
-    // 5. 清理不带"分"字的时间
-    for (const p of patternsWithoutFen) s = s.replace(p, '');
-    
-    // 6. 清理工作时间表达
-    for (const p of patternsWorkTime) s = s.replace(p, '');
-    
-    // 7. 清理新增口语化时间表达
-    for (const p of patternsColloquial) s = s.replace(p, '');
+    return cleaned.replace(/\s+/g, ' ').trim();
+  }
 
-    // 移除调度/频率词
-    const scheduleWords = ['天天', '每周', '每月', '每年', '工作日', '周末'];
-    for (const w of scheduleWords) {
-      const re = new RegExp(w, 'g');
-      s = s.replace(re, '');
-    }
-
-    // 单独移除时间段词
-    const dayWords = ['今天', '明天', '后天', '今晚', '上午', '下午', '晚上', '中午', '早上', '清晨', '傍晚', '凌晨', '午后', '午前', '晚间'];
-    for (const w of dayWords) {
-      const re = new RegExp(w, 'g');
-      s = s.replace(re, '');
-    }
-
-    // 额外清理：移除可能残留的时间相关词汇
-    s = s.replace(/\b\d+分\b/g, '');
-    s = s.replace(/\b(半|一刻|三刻)\b/g, '');
-    s = s.replace(/\b(过|再过)\b/g, '');
-    s = s.replace(/\b整\b/g, '');
+  // 移除分类表达式
+  stripCategoryExpressions(text) {
+    if (!text) return '';
     
-    // 清理多余的空格
-    s = s.replace(/\s+/g, ' ').trim();
+    const categoryWords = [
+      '工作', 'work', '上班', '会议', '开会', '项目', '任务', 'deadline',
+      '生活', 'life', '吃饭', '睡觉', '购物', '买菜', '家务',
+      '学习', 'study', '读书', '上课', '作业', '考试', '复习',
+      '健康', 'health', '运动', '健身', '跑步', '瑜伽', '吃药',
+      '娱乐', 'entertainment', '游戏', '打游戏', '电竞', '电影'
+    ];
+    
+    let cleaned = text;
+    categoryWords.forEach(word => {
+      const regex = new RegExp(word, 'gi');
+      cleaned = cleaned.replace(regex, '');
+    });
+    
+    return cleaned.replace(/\s+/g, ' ').trim();
+  }
 
-    return s;
+  // 移除重复模式表达式
+  stripRepeatExpressions(text) {
+    if (!text) return '';
+    
+    const repeatWords = [
+      '每天', 'daily', '天天', '每日',
+      '每周', 'weekly', '星期', '周',
+      '每月', 'monthly', '月',
+      '每年', 'yearly', '年'
+    ];
+    
+    let cleaned = text;
+    repeatWords.forEach(word => {
+      const regex = new RegExp(word, 'gi');
+      cleaned = cleaned.replace(regex, '');
+    });
+    
+    return cleaned.replace(/\s+/g, ' ').trim();
+  }
+
+  // 移除标签表达式
+  stripTagExpressions(text) {
+    if (!text) return '';
+    
+    // 移除 #标签 格式
+    let cleaned = text.replace(/#\w+/g, '');
+    
+    return cleaned.replace(/\s+/g, ' ').trim();
+  }
+
+  // 移除备注表达式
+  stripNotesExpressions(text) {
+    if (!text) return '';
+    
+    // 移除备注相关表达式
+    let cleaned = text
+      .replace(/备注[：:]\s*.*$/g, '')
+      .replace(/说明[：:]\s*.*$/g, '')
+      .replace(/注意[：:]\s*.*$/g, '');
+    
+    return cleaned.replace(/\s+/g, ' ').trim();
   }
 
   // 解析时间表达式（增强版）
@@ -1195,29 +1064,27 @@ class SmartParser {
   }
 
   // 生成智能建议
-  generateSuggestions(parsedData) {
+  generateSuggestions(result) {
     const suggestions = [];
     
-    // 优先级建议
-    if (parsedData.priority === 'urgent') {
-      suggestions.push('⚠️ 这是紧急提醒，建议立即处理');
-    } else if (parsedData.priority === 'high') {
-      suggestions.push('🔴 这是重要提醒，请优先处理');
+    if (!result.time) {
+      suggestions.push('💡 可以添加时间，如"今晚20点"、"明天上午9点"');
     }
     
-    // 分类建议
-    if (parsedData.category) {
-      suggestions.push(`📂 已自动分类到: ${parsedData.category}`);
+    if (result.priority === 'normal') {
+      suggestions.push('💡 可以设置优先级，如"紧急"、"重要"');
     }
     
-    // 标签建议
-    if (parsedData.tags.length > 0) {
-      suggestions.push(`🏷️ 已添加标签: ${parsedData.tags.join(', ')}`);
+    if (!result.category) {
+      suggestions.push('💡 可以指定分类，如"工作"、"生活"、"学习"');
     }
     
-    // 重复模式建议
-    if (parsedData.repeatPattern !== 'none') {
-      suggestions.push(`🔄 已设置为${this.getRepeatPatternText(parsedData.repeatPattern)}重复`);
+    if (result.repeatPattern === 'none') {
+      suggestions.push('💡 可以设置重复，如"每天"、"每周一"');
+    }
+    
+    if (result.tags.length === 0) {
+      suggestions.push('💡 可以添加标签，如"#重要"、"#会议"');
     }
     
     return suggestions;
@@ -1262,6 +1129,33 @@ class SmartParser {
     const time = this.parseTimeExpression(processed);
     console.log(`解析时间: ${time ? time.toLocaleString('zh-CN') : 'null'}`);
     return time;
+  }
+
+  // 计算置信度
+  calculateConfidence(result) {
+    let confidence = 0.5; // 基础置信度
+    
+    // 时间解析成功
+    if (result.time) confidence += 0.2;
+    
+    // 分类识别成功
+    if (result.category) confidence += 0.15;
+    
+    // 优先级设置
+    if (result.priority !== 'normal') confidence += 0.1;
+    
+    // 重复模式识别
+    if (result.repeatPattern !== 'none') confidence += 0.1;
+    
+    // 标签提取
+    if (result.tags.length > 0) confidence += 0.05;
+    
+    // 消息内容长度适中
+    if (result.message && result.message.length > 5 && result.message.length < 100) {
+      confidence += 0.1;
+    }
+    
+    return Math.min(confidence, 1.0);
   }
 }
 

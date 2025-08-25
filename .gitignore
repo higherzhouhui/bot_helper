@@ -27,3 +27,85 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+
+
+# 配置备份文件
+backup/
+config_backup/
+*.backup
+*.bak
+
+# 数据库备份文件
+*.sqlite.backup
+*.db.backup
+database_backup/
+
+# 日志备份文件
+logs_backup/
+*.log.backup
+
+# 临时目录
+temp/
+tmp/
+cache/
+
+# 用户上传文件
+uploads/
+user_files/
+attachments/
+
+# 敏感配置文件
+secrets/
+keys/
+*.key
+*.pem
+*.crt
+*.p12
+
+# 本地配置文件
+config.local.js
+settings.local.json
+*.local.*
+
+# 测试覆盖率报告
+coverage/
+.nyc_output/
+
+# 性能分析文件
+*.cpuprofile
+*.heapsnapshot
+
+# 锁文件（可选，根据团队策略决定）
+# package-lock.json
+# yarn.lock
+
+# 运行时文件
+.pm2/
+*.pid
+
+# 系统临时文件
+*.swp
+*.swo
+*~
+
+# 压缩包
+*.zip
+*.tar.gz
+*.rar
+
+# 备份压缩包
+backup_*.zip
+backup_*.tar.gz
+
+# 本地开发文件
+.local/
+local/
+dev/
+
+# 监控和调试文件
+debug/
+monitor/
+*.debug
+
+# 自定义忽略文件
+custom_ignore.txt
