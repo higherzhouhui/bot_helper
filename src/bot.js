@@ -363,10 +363,22 @@ class TelegramReminderBot {
         await this.newsHandler.handleNewsCallback(callbackQuery);
       } else if (data.startsWith('web3_')) {
         await this.newsHandler.handleWeb3Callback(callbackQuery);
+      } else if (data === 'create_reminder') {
+        await this.commandHandler.handleCreateReminder(callbackQuery);
+      } else if (data === 'my_reminders') {
+        await this.commandHandler.handleMyReminders(callbackQuery);
+      } else if (data === 'reminder_stats') {
+        await this.commandHandler.handleReminderStats(callbackQuery);
+      } else if (data === 'search_reminders') {
+        await this.commandHandler.handleSearchReminders(callbackQuery);
+      } else if (data === 'cleanup_completed') {
+        await this.commandHandler.handleCleanupCompleted(callbackQuery);
       } else if (data.startsWith('reminder_')) {
         await this.reminderHandler.handleReminderCallback(callbackQuery);
       } else if (data.startsWith('user_')) {
         await this.userService.handleUserCallback(callbackQuery);
+      } else if (data === 'back_to_main') {
+        await this.commandHandler.handleMainMenu(callbackQuery.message);
       } else if (data === 'help') {
         await this.commandHandler.handleHelpCommand(callbackQuery.message);
       } else if (data === 'main_menu') {
