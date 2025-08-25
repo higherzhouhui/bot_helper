@@ -340,23 +340,23 @@ class NewsHandler {
         await this.handleNewsCategories(callbackQuery.message);
       } else if (data === 'news_search') {
         await this.handleNewsSearch(callbackQuery.message);
-      } else if (data.startsWith('category_')) {
-        const categoryId = data.replace('category_', '');
-        await this.handleCategoryNews(callbackQuery.message, categoryId);
-      } else if (data.startsWith('news_page_')) {
-        // 处理新闻分页
-        const page = parseInt(data.replace('news_page_', ''));
-        await this.handleNewsCommand(callbackQuery.message, page);
-      } else if (data.startsWith('hot_page_')) {
-        // 处理热门新闻分页
-        const page = parseInt(data.replace('hot_page_', ''));
-        await this.handleHotNews(callbackQuery.message, page);
       } else if (data.startsWith('category_page_')) {
-        // 处理分类新闻分页
+        // 处理分类新闻分页 - 必须在category_之前检查
         const parts = data.replace('category_page_', '').split('_');
         const categoryId = parts[0];
         const page = parseInt(parts[1]);
         await this.handleCategoryNews(callbackQuery.message, categoryId, page);
+      } else if (data.startsWith('category_')) {
+        const categoryId = data.replace('category_', '');
+        await this.handleCategoryNews(callbackQuery.message, categoryId);
+      } else if (data.startsWith('hot_page_')) {
+        // 处理热门新闻分页
+        const page = parseInt(data.replace('hot_page_', ''));
+        await this.handleHotNews(callbackQuery.message, page);
+      } else if (data.startsWith('news_page_')) {
+        // 处理新闻分页
+        const page = parseInt(data.replace('news_page_', ''));
+        await this.handleNewsCommand(callbackQuery.message, page);
       } else if (data.startsWith('search_page_')) {
         // 处理搜索分页
         const parts = data.replace('search_page_', '').split('_');

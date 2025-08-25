@@ -408,8 +408,18 @@ class TelegramReminderBot {
       } else if (data === 'news_back') {
         await this.newsHandler.handleNewsBack(callbackQuery);
       } else if (data.startsWith('category_')) {
-        const categoryId = data.replace('category_', '');
-        await this.newsHandler.handleCategoryNews(callbackQuery.message, categoryId);
+        // 处理分类新闻回调
+        if (data.startsWith('category_page_')) {
+          // 处理分类新闻分页 - 必须在category_之前检查
+          const parts = data.replace('category_page_', '').split('_');
+          const categoryId = parts[0];
+          const page = parseInt(parts[1]);
+          await this.newsHandler.handleCategoryNews(callbackQuery, categoryId, page);
+        } else {
+          // 处理普通分类新闻
+          const categoryId = data.replace('category_', '');
+          await this.newsHandler.handleCategoryNews(callbackQuery, categoryId);
+        }
       } else if (data.startsWith('priority_')) {
         const priority = data.replace('priority_', '');
         await this.reminderHandler.handlePrioritySelection(callbackQuery, priority);
