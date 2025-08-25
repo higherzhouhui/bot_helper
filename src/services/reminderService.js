@@ -1,8 +1,13 @@
 const { User, Category, Reminder, ReminderHistory, ReminderTemplate } = require('../models');
 const Sequelize = require('sequelize');
 const { calculateNextReminderTime } = require('../utils/dateUtils');
+const QuotaService = require('./quotaService');
 
 class ReminderService {
+  constructor() {
+    this.quotaService = new QuotaService();
+  }
+
   // 创建或更新用户
   async createOrUpdateUser(userData) {
     try {
@@ -145,6 +150,12 @@ class ReminderService {
       // 输入验证
       if (!reminderData.userId || !reminderData.chatId || !reminderData.message || !reminderData.reminderTime) {
         throw new Error('缺少必需的提醒数据');
+      }
+      
+      // 检查用户配额
+      const quotaCheck = await this.quotaService.checkUserQuota(reminderData.userId);
+      if (!quotaCheck.allowed) {
+        throw new Error(quotaCheck.message);
       }
       
       // 消息长度限制
@@ -1166,6 +1177,36 @@ class ReminderService {
         console.error('回滚发送计数失败:', rollbackError);
       }
       return false;
+    }
+  }
+
+  // 获取用户配额状态
+  async getUserQuotaStatus(userId) {
+    try {
+      return await this.quotaService.getUserQuotaStatus(userId);
+    } catch (error) {
+      console.error('获取用户配额状态失败:', error);
+      throw error;
+    }
+  }
+
+  // 强制清理用户超出限制的提醒（管理员功能）
+  async enforceUserQuota(userId) {
+    try {
+      return await this.quotaService.enforceUserQuota(userId);
+    } catch (error) {
+      console.error('强制清理用户配额失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取系统配额统计（管理员功能）
+  async getSystemQuotaStats() {
+    try {
+      return await this.quotaService.getSystemQuotaStats();
+    } catch (error) {
+      console.error('获取系统配额统计失败:', error);
+      throw error;
     }
   }
 }
