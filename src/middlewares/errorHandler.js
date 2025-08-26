@@ -216,7 +216,7 @@ class ErrorHandler {
         examples = '\n\n💡 可用的重复模式：\n• 每天 (daily)\n• 每周 (weekly)\n• 每月 (monthly)\n• 每年 (yearly)';
       } else if (error.type === 'message') {
         errorMessage = '❌ 提醒内容不能为空';
-        examples = '\n\n💡 请输入有效的提醒内容，例如：\n• 今晚20点提醒我开会\n• 明天上午9点重要提醒：提交报告\n• 每天提醒我喝水';
+        examples = '\n\n💡 请输入有效的提醒内容，例如：\n• 今晚20点提醒我开会\n• 明天上午9点重要提醒：提交报告\n• 每天8:00提醒我喝水';
       }
 
       const fullMessage = errorMessage + examples;

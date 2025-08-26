@@ -154,7 +154,7 @@ const Reminder = sequelize.define('Reminder', {
     allowNull: true,
     field: 'repeat_pattern',
     validate: {
-      isIn: [['none', 'daily', 'weekly', 'monthly', 'yearly', 'custom']]
+      isIn: [['none', 'daily', 'weekly', 'monthly', 'yearly', 'workdays', 'weekends']]
     }
   },
   repeatEndDate: {

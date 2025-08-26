@@ -1580,8 +1580,8 @@ class SmartParser {
       { pattern: /(每周|weekly|星期|周)/, repeatType: 'weekly' },
       { pattern: /(每月|monthly|月)/, repeatType: 'monthly' },
       { pattern: /(每年|yearly|年)/, repeatType: 'yearly' },
-      { pattern: /(工作日|workday)/, repeatType: 'workday' },
-      { pattern: /(周末|weekend)/, repeatType: 'weekend' }
+      { pattern: /(工作日|workday)/, repeatType: 'workdays' },
+      { pattern: /(周末|weekend)/, repeatType: 'weekends' }
     ];
 
     for (const { pattern, repeatType } of repeatPatterns) {

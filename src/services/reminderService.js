@@ -398,21 +398,23 @@ class ReminderService {
 
       // 检查是否是重复提醒，如果是则创建下一次提醒
       if (reminder.repeatPattern && reminder.repeatPattern !== 'none') {
-        nextReminderTime = calculateNextReminderTime(reminder.reminderTime, reminder.repeatPattern);
+        // 修复：基于当前时间计算下次提醒时间，而不是基于原提醒时间
+        const currentTime = new Date();
+        nextReminderTime = calculateNextReminderTime(currentTime, reminder.repeatPattern);
         
         if (nextReminderTime) {
           // 检查是否超过重复结束日期
           if (reminder.repeatEndDate && nextReminderTime > reminder.repeatEndDate) {
             console.log(`重复提醒已达到结束日期，不创建下一次提醒`);
           } else {
-            // 创建下一次提醒
+            // 创建下一次提醒，保持重复计数递增
             await Reminder.create({
               userId: reminder.userId,
               chatId: reminder.chatId,
               message: reminder.message,
               reminderTime: nextReminderTime,
               status: 'pending',
-              repeatCount: 0,
+              repeatCount: (reminder.repeatCount || 0) + 1, // 修复：递增重复计数而不是重置
               categoryId: reminder.categoryId,
               priority: reminder.priority,
               tags: reminder.tags,
@@ -422,7 +424,7 @@ class ReminderService {
             });
             
             nextReminderCreated = true;
-            console.log(`已创建下一次重复提醒: ${nextReminderTime.toLocaleString('zh-CN')}`);
+            console.log(`已创建下一次重复提醒: ${nextReminderTime.toLocaleString('zh-CN')}, 重复次数: ${(reminder.repeatCount || 0) + 1}`);
           }
         }
       }
