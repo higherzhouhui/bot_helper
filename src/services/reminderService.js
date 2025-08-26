@@ -398,23 +398,33 @@ class ReminderService {
 
       // 检查是否是重复提醒，如果是则创建下一次提醒
       if (reminder.repeatPattern && reminder.repeatPattern !== 'none') {
-        // 修复：基于当前时间计算下次提醒时间，而不是基于原提醒时间
-        const currentTime = new Date();
-        nextReminderTime = calculateNextReminderTime(currentTime, reminder.repeatPattern);
+        // 基于原定提醒时间，按固定节奏向前推进，跳过已过期周期
+        const now = new Date();
+        let baseTime = new Date(reminder.reminderTime);
+        let candidate = calculateNextReminderTime(baseTime, reminder.repeatPattern);
+        
+        // 最多推进1000步以避免异常情况下的死循环
+        let safetyCounter = 0;
+        while (candidate && candidate <= now && safetyCounter < 1000) {
+          baseTime = candidate;
+          candidate = calculateNextReminderTime(baseTime, reminder.repeatPattern);
+          safetyCounter++;
+        }
+        nextReminderTime = candidate;
         
         if (nextReminderTime) {
           // 检查是否超过重复结束日期
           if (reminder.repeatEndDate && nextReminderTime > reminder.repeatEndDate) {
             console.log(`重复提醒已达到结束日期，不创建下一次提醒`);
           } else {
-            // 创建下一次提醒，保持重复计数递增
+            // 创建下一次提醒，重复计数递增
             await Reminder.create({
               userId: reminder.userId,
               chatId: reminder.chatId,
               message: reminder.message,
               reminderTime: nextReminderTime,
               status: 'pending',
-              repeatCount: (reminder.repeatCount || 0) + 1, // 修复：递增重复计数而不是重置
+              repeatCount: (reminder.repeatCount || 0) + 1,
               categoryId: reminder.categoryId,
               priority: reminder.priority,
               tags: reminder.tags,
