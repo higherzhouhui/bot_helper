@@ -240,7 +240,9 @@ class SmartParser {
   // 清理消息内容（移除时间表达等）
   cleanMessage(text) {
     // 保持向后兼容
-    return this.stripTimeExpressions(text);
+    let cleaned = this.stripTimeExpressions(text);
+    cleaned = this.stripHelperExpressions(cleaned);
+    return cleaned;
   }
 
   // 移除时间表达式
@@ -260,6 +262,16 @@ class SmartParser {
       .replace(/(\d+)\s*周后?/, '')
       .replace(/(\d+)\s*月后?/, '')
       .replace(/(\d+)\s*年后?/, '')
+      // 中文数字相对时间
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*分钟后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*分后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*小时后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*小時后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*天后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*周后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*星期后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*月后?/g, '')
+      .replace(/([一二两三四五六七八九十百千万半]+)\s*年后?/g, '')
       .replace(/(下个?|上个?)\s*(周一|周二|周三|周四|周五|周六|周日|星期[一二三四五六日])/, '')
       .replace(/(周一|周二|周三|周四|周五|周六|周日|星期[一二三四五六日])/, '')
       .replace(/(每天|每周|每月|每年|天天|日日|周周|月月|年年)/g, '')
@@ -269,6 +281,18 @@ class SmartParser {
     // 清理多余空格
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
     
+    return cleaned;
+  }
+
+  // 移除辅助提示词（如"提醒我/记得/帮我/请/麻烦"）
+  stripHelperExpressions(text) {
+    if (!text) return '';
+    let cleaned = text.trim();
+    // 仅移除句首连续出现的提示词，避免误删正文中的动词
+    const helperRegex = /^(?:请|麻烦|帮我|记得|提醒我|提醒)\s*/;
+    while (helperRegex.test(cleaned)) {
+      cleaned = cleaned.replace(helperRegex, '').trim();
+    }
     return cleaned;
   }
 
@@ -1351,6 +1375,7 @@ class SmartParser {
 
     // 提取动作
     const actionPatterns = [
+      /提醒\s*(.+)/, 
       /提醒我\s*(.+)/,
       /记得\s*(.+)/,
       /帮我\s*(.+)/,

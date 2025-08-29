@@ -74,7 +74,7 @@ class CommandHandler {
   }
 
   // 处理提醒列表命令
-  async handleRemindersCommand(msg) {
+  async handleRemindersCommand(msg, page = 1) {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
@@ -85,19 +85,35 @@ class CommandHandler {
         return;
       }
 
-      // 先发列表头
-      await this.bot.sendMessage(chatId, `📋 您的提醒列表（共 ${reminders.length} 条，展示前 5 条）`);
+      const pageSize = 5;
+      const total = reminders.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const currentPage = Math.min(Math.max(1, page), totalPages);
+      const startIndex = (currentPage - 1) * pageSize;
+      const pageItems = reminders.slice(startIndex, startIndex + pageSize);
 
-      // 逐条发送前5条，附带操作按钮（编辑/删除/延后/小睡）
-      for (const reminder of reminders.slice(0, 5)) {
+      // 列表头，包含分页信息
+      await this.bot.sendMessage(chatId, `📋 您的提醒列表（共 ${total} 条）\n📄 第 ${currentPage}/${totalPages} 页，每页 ${pageSize} 条`);
+
+      // 逐条发送当前页的提醒，附带操作按钮（编辑/删除/延后/小睡）
+      for (const reminder of pageItems) {
         const text = formatReminderMessage(reminder);
         const keyboard = createActionButtons(reminder.id);
         await this.bot.sendMessage(chatId, text, { reply_markup: keyboard });
       }
 
-      // 底部功能区
+      // 底部功能区 + 分页按钮
+      const paginationRow = [];
+      if (currentPage > 1) {
+        paginationRow.push({ text: '⬅️ 上一页', callback_data: `reminders_page_${currentPage - 1}` });
+      }
+      if (currentPage < totalPages) {
+        paginationRow.push({ text: '下一页 ➡️', callback_data: `reminders_page_${currentPage + 1}` });
+      }
+
       const footerKeyboard = {
         inline_keyboard: [
+          ...(paginationRow.length > 0 ? [paginationRow] : []),
           [
             { text: '⏰ 创建提醒', callback_data: 'create_reminder' },
             { text: '📊 统计信息', callback_data: 'reminder_stats' }
@@ -109,7 +125,7 @@ class CommandHandler {
         ]
       };
 
-      await this.bot.sendMessage(chatId, '👇 你可以继续创建、查看统计或搜索/清理提醒：', { reply_markup: footerKeyboard });
+      await this.bot.sendMessage(chatId, '👇 你可以翻页、创建、查看统计或搜索/清理提醒：', { reply_markup: footerKeyboard });
     } catch (error) {
       console.error('获取提醒列表失败:', error);
       await this.bot.sendMessage(chatId, '❌ 获取提醒列表失败，请重试');
@@ -487,6 +503,10 @@ class CommandHandler {
         await this.handleSearchReminders(callbackQuery);
       } else if (data === 'cleanup_completed') {
         await this.handleCleanupCompleted(callbackQuery);
+      } else if (data.startsWith('reminders_page_')) {
+        const page = parseInt(data.split('_')[2]);
+        await this.handleRemindersCommand({ chat: { id: callbackQuery.message.chat.id }, from: { id: callbackQuery.from.id } }, page);
+        await this.bot.answerCallbackQuery(callbackQuery.id, '📋 提醒列表已显示');
       }
     } catch (error) {
       console.error('处理命令回调失败:', error);

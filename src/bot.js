@@ -399,6 +399,10 @@ class TelegramReminderBot {
         await this.userHandler.handleUserSettings(callbackQuery);
       } else if (data.startsWith('settings_')) {
         await this.userHandler.handleSettingsCallback(callbackQuery);
+      } else if (data.startsWith('reminders_page_')) {
+        const page = parseInt(data.split('_')[2]);
+        await this.commandHandler.handleRemindersCommand({ chat: { id: callbackQuery.message.chat.id }, from: { id: callbackQuery.from.id } }, page);
+        await this.bot.answerCallbackQuery(callbackQuery.id, '📄 已切换页面');
       } else if (data.startsWith('confirm_')) {
         await this.handleConfirmAction(callbackQuery);
       } else if (data.startsWith('cancel_')) {
@@ -500,11 +504,20 @@ class TelegramReminderBot {
     const reminderId = parseInt(callbackQuery.data.split('_')[1]);
 
     try {
-      const reminder = await reminderService.delayReminder(reminderId, new Date(Date.now() + 10 * 60 * 1000));
+      // 先获取提醒信息
+      const currentReminder = await reminderService.getReminderById(reminderId, userId);
+      if (!currentReminder) {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+        return;
+      }
+
+      // 基于提醒的原始时间延后10分钟
+      const newTime = new Date(currentReminder.reminderTime.getTime() + 10 * 60 * 1000);
+      const reminder = await reminderService.delayReminder(reminderId, newTime);
       if (reminder) {
         // 编辑原消息，显示延后状态
         try {
-          await this.bot.editMessageText('⏰ 提醒已延后10分钟！', {
+          await this.bot.editMessageText(`⏰ 提醒已延后10分钟！\n📅 新时间：${newTime.toLocaleString('zh-CN')}`, {
             chat_id: chatId,
             message_id: callbackQuery.message.message_id,
             reply_markup: { inline_keyboard: [] } // 清空按钮
@@ -512,7 +525,7 @@ class TelegramReminderBot {
         } catch (editError) {
           console.warn('无法编辑消息:', editError.message);
           // 如果无法编辑，发送新消息
-          await this.bot.sendMessage(chatId, '⏰ 提醒已延后10分钟！');
+          await this.bot.sendMessage(chatId, `⏰ 提醒已延后10分钟！\n📅 新时间：${newTime.toLocaleString('zh-CN')}`);
         }
         await this.bot.answerCallbackQuery(callbackQuery.id, '⏰ 提醒已延后');
       } else {
@@ -527,14 +540,24 @@ class TelegramReminderBot {
   // 处理小睡提醒
   async handleSnoozeReminder(callbackQuery) {
     const chatId = callbackQuery.message.chat.id;
+    const userId = callbackQuery.from.id;
     const reminderId = parseInt(callbackQuery.data.split('_')[1]);
 
     try {
-      const reminder = await reminderService.snoozeReminder(reminderId, new Date(Date.now() + 5 * 60 * 1000));
+      // 先获取提醒信息
+      const currentReminder = await reminderService.getReminderById(reminderId, userId);
+      if (!currentReminder) {
+        await this.bot.answerCallbackQuery(callbackQuery.id, '❌ 提醒不存在');
+        return;
+      }
+
+      // 基于提醒的原始时间小睡5分钟
+      const snoozeTime = new Date(currentReminder.reminderTime.getTime() + 5 * 60 * 1000);
+      const reminder = await reminderService.snoozeReminder(reminderId, snoozeTime);
       if (reminder) {
         // 编辑原消息，显示小睡状态
         try {
-          await this.bot.editMessageText('🔔 提醒已小睡5分钟！', {
+          await this.bot.editMessageText(`🔔 提醒已小睡5分钟！\n📅 新时间：${snoozeTime.toLocaleString('zh-CN')}`, {
             chat_id: chatId,
             message_id: callbackQuery.message.message_id,
             reply_markup: { inline_keyboard: [] } // 清空按钮
@@ -542,7 +565,7 @@ class TelegramReminderBot {
         } catch (editError) {
           console.warn('无法编辑消息:', editError.message);
           // 如果无法编辑，发送新消息
-          await this.bot.sendMessage(chatId, '🔔 提醒已小睡5分钟！');
+          await this.bot.sendMessage(chatId, `🔔 提醒已小睡5分钟！\n📅 新时间：${snoozeTime.toLocaleString('zh-CN')}`);
         }
         await this.bot.answerCallbackQuery(callbackQuery.id, '🔔 提醒已小睡');
       } else {
